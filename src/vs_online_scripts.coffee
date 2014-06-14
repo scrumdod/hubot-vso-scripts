@@ -12,10 +12,10 @@ Client = require 'vso-client'
 
 
 module.exports = (robot) ->  
-  projectName = process.env.HUBOT_PROJECT_NAME	
+  projectName = process.env.HUBOT_VSONLINE_PROJECT_NAME	
   username = process.env.HUBOT_VSONLINE_USER_NAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
-  url = process.env.HUBOT_VSONLINE_ACCOUNT + ".visualstudio.com"
+  url = "https://" + process.env.HUBOT_VSONLINE_ACCOUNT + ".visualstudio.com"
   collection = process.env.HUBOT_COLLECTION_NAME || "DefaultCollection"
 
   robot.respond /GetBuilds/i, (msg) ->    
