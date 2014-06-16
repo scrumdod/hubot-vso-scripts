@@ -69,7 +69,6 @@ module.exports = (robot) ->
       msg.reply reply
 
   robot.respond /vso show builds/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
     definitions=[]
     client = Client.createClient(url, collection, username, password)
     client.getBuildDefinitions (err, buildDefinitions) ->
