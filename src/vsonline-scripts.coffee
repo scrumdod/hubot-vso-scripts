@@ -22,7 +22,7 @@ VSO_CONFIG_KEYS_WHITE_LIST = {
 class VsoData
   
   constructor: (robot) ->
-    @vsoData = robot.brain.data.vsonline ||= 
+    @vsoData = robot.brain.data.vsonline ||=
       rooms: {}
       
   roomDefaults: (room) ->
@@ -31,7 +31,7 @@ class VsoData
   getRoomDefault: (room, key) ->
     return @vsoData.rooms[room]?[key]
 
-module.exports = (robot) ->  
+module.exports = (robot) ->
   username = process.env.HUBOT_VSONLINE_USER_NAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
   account = process.env.HUBOT_VSONLINE_ACCOUNT
@@ -43,7 +43,8 @@ module.exports = (robot) ->
   checkRoomDefault = (msg, key) ->
     val = vsoData().getRoomDefault msg.envelope.room, key
     unless val
-      help = VSO_CONFIG_KEYS_WHITE_LIST[key]?.help or "Error: room default '#{key}' not set."
+      help = VSO_CONFIG_KEYS_WHITE_LIST[key]?.help or
+        "Error: room default '#{key}' not set."
       msg.reply help
       
     return val
@@ -51,8 +52,8 @@ module.exports = (robot) ->
   robot.respond /vso show room defaults/i, (msg)->
     defaults = vsoData().roomDefaults msg.envelope.room
     reply = "VSOnline defaults for this room:\n"
-    reply += "#{key}: #{defaults?[key] or 'Not set'} \n" for key of VSO_CONFIG_KEYS_WHITE_LIST
-    msg.reply reply    
+    reply += "#{key}: #{defaults?[key] or '<Not set>'} \n" for key of VSO_CONFIG_KEYS_WHITE_LIST
+    msg.reply reply
     
   robot.respond /vso set room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
     return msg.reply "Unknown setting #{msg.match[1]}" unless msg.match[1] of VSO_CONFIG_KEYS_WHITE_LIST
@@ -74,15 +75,15 @@ module.exports = (robot) ->
     client.getBuildDefinitions (err, buildDefinitions) ->
       if err
         console.log err
-      definitions.push "Here are the current build definitions: "              
-      for build in buildDefinitions                                           
-        definitions.push build.name + ' ' + build.id      
-      msg.send definitions.join "\n"   
+      definitions.push "Here are the current build definitions: "
+      for build in buildDefinitions
+        definitions.push build.name + ' ' + build.id
+      msg.send definitions.join "\n"
 
 
-  robot.respond /vso build (.*)/i, (msg) ->    
-    buildId = msg.match[1]    
-    client = Client.createClient(url, collection, username, password)    
+  robot.respond /vso build (.*)/i, (msg) ->
+    buildId = msg.match[1]
+    client = Client.createClient(url, collection, username, password)
     buildRequest =
       definition:
         id: buildId
@@ -97,16 +98,16 @@ module.exports = (robot) ->
   robot.respond /vso CreatePBI (.*) (with description) (.*)/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
 
-    title = msg.match[1]   
-    descriptions = msg.match[3]     
+    title = msg.match[1]
+    descriptions = msg.match[3]
     workItem=
       fields : []
 
     titleField=
       field :
-        refName : "System.Title"    
-      value :  title    
-    workItem.fields.push titleField    
+        refName : "System.Title"
+      value :  title
+    workItem.fields.push titleField
     
     typeField=
       field :
@@ -124,13 +125,13 @@ module.exports = (robot) ->
       field:
         refName : "System.Reason"
       value :  "New Backlog Item"
-    workItem.fields.push reasonField 
+    workItem.fields.push reasonField
 
     areaField=
       field:
         refName : "System.AreaPath"
       value :  project
-    workItem.fields.push areaField 
+    workItem.fields.push areaField
 
     iterationField=
       field:
@@ -142,26 +143,26 @@ module.exports = (robot) ->
       field:
         refName : "System.Description"
       value :  descriptions
-    workItem.fields.push descriptionField   
+    workItem.fields.push descriptionField
                
-    client = Client.createClient(url, collection, username, password);    
-    client.createWorkItem workItem, (err,createdWorkItem) ->      
+    client = Client.createClient(url, collection, username, password)
+    client.createWorkItem workItem, (err,createdWorkItem) ->
       if err
         console.log err
       msg.send "PBI " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
 
   robot.respond /vso CreateBug (.*) (with description) (.*)/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-    title = msg.match[1]     
-    descriptions = msg.match[3]   
+    title = msg.match[1]
+    descriptions = msg.match[3]
     workItem=
       fields : []
 
     titleField=
       field :
-        refName : "System.Title"    
-      value :  title    
-    workItem.fields.push titleField    
+        refName : "System.Title"
+      value :  title
+    workItem.fields.push titleField
     
     typeField=
       field :
@@ -179,13 +180,13 @@ module.exports = (robot) ->
       field:
         refName : "System.Reason"
       value :  "New Defect Reported"
-    workItem.fields.push reasonField 
+    workItem.fields.push reasonField
 
     areaField=
       field:
         refName : "System.AreaPath"
       value :  project
-    workItem.fields.push areaField 
+    workItem.fields.push areaField
 
     iterationField=
       field:
@@ -197,16 +198,16 @@ module.exports = (robot) ->
       field:
         refName : "System.Description"
       value :  descriptions
-    workItem.fields.push descriptionField   
+    workItem.fields.push descriptionField
                
-    client = Client.createClient(url, collection, username, password);
-    client.createWorkItem workItem, (err,createdWorkItem) ->       
+    client = Client.createClient(url, collection, username, password)
+    client.createWorkItem workItem, (err,createdWorkItem) ->
       if err
-        console.log err     
+        console.log err
       msg.send "BUG " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
     
    
-  robot.respond /What have I done today/i, (msg) ->        
+  robot.respond /What have I done today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
   
     myuser = msg.message.user.displayName
@@ -216,45 +217,45 @@ module.exports = (robot) ->
     #console.log wiql
     client = Client.createClient(url, collection, username, password)
 
-    client.getRepositories null, (err,repositories) ->     
+    client.getRepositories null, (err,repositories) ->
       if err
-        console.log err             
+        console.log err
       mypushes=[]
-      today = yesterdayDate() 
-      for repo in repositories             
+      today = yesterdayDate()
+      for repo in repositories
         client.getCommits repo.id, null, myuser, null,today,(err,pushes) ->
           if err
-            console log err                 
-          numPushes = Object.keys(pushes).length    
-          if numPushes >0             
-            mypushes.push "You have written code!  These are your commits for the " + repo.name + " repo"                               
-            for push in pushes                          
-              mypushes.push "commit" + push.commitId                   
+            console log err
+          numPushes = Object.keys(pushes).length
+          if numPushes >0
+            mypushes.push "You have written code!  These are your commits for the " + repo.name + " repo"
+            for push in pushes
+              mypushes.push "commit" + push.commitId
             msg.send mypushes.join "\n"
     tasks=[]
     client.getWorkItemIds wiql, project, (err, ids) ->
       if err
-        console.log err                      
-      numTasks = Object.keys(ids).length 
+        console.log err
+      numTasks = Object.keys(ids).length
       if numTasks >0
-        workItemIds=[]      
-        for id in ids       
+        workItemIds=[]
+        for id in ids
           workItemIds.push id
          
         client.getWorkItemsById workItemIds, null, null, null, (err, items) ->
           if err
-            console.log err                 
+            console.log err
           tasks.push "You have worked on the following tasks today: "
         
            
-          for task in items        
+          for task in items
             for item in task.fields
-              if item.field.name == "Title"                                    
-                tasks.push item.value         
-                msg.send tasks.join "\n" 
+              if item.field.name == "Title"
+                tasks.push item.value
+                msg.send tasks.join "\n"
 
 yesterdayDate = () ->
   date = new Date()
-  date.setDate(date.getDate() - 1);
-  date.setUTCHours(0,0,0,0);
+  date.setDate(date.getDate() - 1)
+  date.setUTCHours(0,0,0,0)
   date.toISOString()
