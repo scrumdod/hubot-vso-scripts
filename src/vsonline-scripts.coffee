@@ -9,13 +9,15 @@
 #   hubot vso createpbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
 #   hubot vso createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
+#
 
 Client = require 'vso-client'
 util = require 'util'
 
-VSO_CONFIG_KEYS_WHITE_LIST = [
-  "project"
-]
+VSO_CONFIG_KEYS_WHITE_LIST = {
+  "project":
+    help: "Project not set for this room. Set with hubot vso set room default project = {project name or ID}"
+}
 
 class VsoData
   
@@ -34,23 +36,26 @@ module.exports = (robot) ->
   password = process.env.HUBOT_VSONLINE_PASSWORD
   account = process.env.HUBOT_VSONLINE_ACCOUNT
   url = "https://#{account}.visualstudio.com"
-  collection = process.env.HUBOT_COLLECTION_NAME || "DefaultCollection"
+  collection = process.env.HUBOT_VSONLINE_COLLECTION_NAME || "DefaultCollection"
 
   vsoData = () => @_vsoData ||= new VsoData(robot)
 
   checkRoomDefault = (msg, key) ->
     val = vsoData().getRoomDefault msg.envelope.room, key
-    msg.reply "Error: room default '#{key}' not set" unless val
+    unless val
+      help = VSO_CONFIG_KEYS_WHITE_LIST[key]?.help or "Error: room default '#{key}' not set."
+      msg.reply help
+      
     return val
     
   robot.respond /vso show room defaults/i, (msg)->
     defaults = vsoData().roomDefaults msg.envelope.room
     reply = "VSOnline defaults for this room:\n"
-    reply += "#{key}: #{defaults?[key] or 'Not set'} \n" for key in VSO_CONFIG_KEYS_WHITE_LIST
+    reply += "#{key}: #{defaults?[key] or 'Not set'} \n" for key of VSO_CONFIG_KEYS_WHITE_LIST
     msg.reply reply    
     
   robot.respond /vso set room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
-    return msg.reply "Unknown setting #{msg.match[1]}" unless msg.match[1] in VSO_CONFIG_KEYS_WHITE_LIST
+    return msg.reply "Unknown setting #{msg.match[1]}" unless msg.match[1] of VSO_CONFIG_KEYS_WHITE_LIST
     defaults =  vsoData().roomDefaults(msg.envelope.room)
     defaults[msg.match[1]] = msg.match[2]
     msg.reply "Room default for #{msg.match[1]} set to #{msg.match[2]}"
