@@ -2,35 +2,81 @@
 #   A way to interact with Visual Studio Online.
 #
 # Commands:
-#   hubot getbuilds - Will return a list of build definitions in the team project, along with their build number.
-#   hubot build <build number> - Triggers a build of the build number specified.
-#   hubot createpbil <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
-#   hubot createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
-#   hubot what have i done today - This will show a list of all tasks that you have updated today
+#   hubot vso show room defaults - Displays room settings
+#   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
+#   hubot vso getbuilds - Will return a list of build definitions, along with their build number.
+#   hubot vso build <build number> - Triggers a build of the build number specified.
+#   hubot vso createpbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
+#   hubot vso createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso what have i done today - This will show a list of all tasks that you have updated today
 
-Client = require 'vso-client' 
+Client = require 'vso-client'
+util = require 'util'
 
+VSO_CONFIG_KEYS_WHITE_LIST = [
+  "project"
+]
+
+class VsoData
+  
+  constructor: (robot) ->
+    @vsoData = robot.brain.data.vsonline ||= 
+      rooms: {}
+      
+  roomDefaults: (room) ->
+    return @vsoData.rooms[room] ||= {}
+    
+  getRoomDefault: (room, key) ->
+    return @vsoData.rooms[room]?[key]
 
 module.exports = (robot) ->  
-  projectName = process.env.HUBOT_VSONLINE_PROJECT_NAME	
   username = process.env.HUBOT_VSONLINE_USER_NAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
-  url = "https://" + process.env.HUBOT_VSONLINE_ACCOUNT + ".visualstudio.com"
+  account = process.env.HUBOT_VSONLINE_ACCOUNT
+  url = "https://#{account}.visualstudio.com"
   collection = process.env.HUBOT_COLLECTION_NAME || "DefaultCollection"
 
-  robot.respond /GetBuilds/i, (msg) ->    
+  vsoData = () => @_vsoData ||= new VsoData(robot)
+
+  checkRoomDefault = (msg, key) ->
+    val = vsoData().getRoomDefault msg.envelope.room, key
+    msg.reply "Error: room default '#{key}' not set" unless val
+    return val
+    
+  robot.respond /vso show room defaults/i, (msg)->
+    defaults = vsoData().roomDefaults msg.envelope.room
+    reply = "VSOnline defaults for this room:\n"
+    reply += "#{key}: #{defaults?[key] or 'Not set'} \n" for key in VSO_CONFIG_KEYS_WHITE_LIST
+    msg.reply reply    
+    
+  robot.respond /vso set room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
+    return msg.reply "Unknown setting #{msg.match[1]}" unless msg.match[1] in VSO_CONFIG_KEYS_WHITE_LIST
+    defaults =  vsoData().roomDefaults(msg.envelope.room)
+    defaults[msg.match[1]] = msg.match[2]
+    msg.reply "Room default for #{msg.match[1]} set to #{msg.match[2]}"
+    
+  robot.respond /show vsonline projects/i, (msg) ->
+    client = Client.createClient(url, collection, username, password)
+    client.getProjects (err, projects) ->
+      return console.log err if err
+      reply = "VSOnline projects for account #{account}: \n"
+      reply += p.name + "\n" for p in projects
+      msg.reply reply
+
+  robot.respond /vso show builds/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
     definitions=[]
     client = Client.createClient(url, collection, username, password)
-    client.getBuildDefinitions projectName, (err,buildDefinitions) ->            
+    client.getBuildDefinitions (err, buildDefinitions) ->
       if err
-        console.log err            
+        console.log err
       definitions.push "Here are the current build definitions: "              
       for build in buildDefinitions                                           
         definitions.push build.name + ' ' + build.id      
       msg.send definitions.join "\n"   
 
 
-  robot.respond /Build (.*)/i, (msg) ->    
+  robot.respond /vso build (.*)/i, (msg) ->    
     buildId = msg.match[1]    
     client = Client.createClient(url, collection, username, password)    
     buildRequest =
@@ -44,7 +90,9 @@ module.exports = (robot) ->
         console.log err
       msg.send "Build queued.  Hope you you don't break the build! " + buildResponse.url
 
-  robot.respond /CreatePBI (.*) (with description) (.*)/i, (msg) ->
+  robot.respond /vso CreatePBI (.*) (with description) (.*)/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+
     title = msg.match[1]   
     descriptions = msg.match[3]     
     workItem=
@@ -77,13 +125,13 @@ module.exports = (robot) ->
     areaField=
       field:
         refName : "System.AreaPath"
-      value :  projectName
+      value :  project
     workItem.fields.push areaField 
 
     iterationField=
       field:
         refName : "System.IterationPath"
-      value :  projectName
+      value :  project
     workItem.fields.push iterationField
 
     descriptionField=
@@ -98,7 +146,8 @@ module.exports = (robot) ->
         console.log err
       msg.send "PBI " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
 
-  robot.respond /CreateBug (.*) (with description) (.*)/i, (msg) ->
+  robot.respond /vso CreateBug (.*) (with description) (.*)/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
     title = msg.match[1]     
     descriptions = msg.match[3]   
     workItem=
@@ -131,13 +180,13 @@ module.exports = (robot) ->
     areaField=
       field:
         refName : "System.AreaPath"
-      value :  projectName
+      value :  project
     workItem.fields.push areaField 
 
     iterationField=
       field:
         refName : "System.IterationPath"
-      value :  projectName
+      value :  project
     workItem.fields.push iterationField
 
     descriptionField=
@@ -154,8 +203,9 @@ module.exports = (robot) ->
     
    
   robot.respond /What have I done today/i, (msg) ->        
+    return unless project = checkRoomDefault msg, "project"
+  
     myuser = msg.message.user.displayName
-    projectName = process.env.HUBOT_PROJECT_NAME
 
     wiql="select [System.Id], [System.WorkItemType], [System.Title], [System.AssignedTo], [System.State], [System.Tags] from WorkItems where [System.WorkItemType] = 'Task' and [System.ChangedBy] = '" + myuser + "' and [System.ChangedDate] = @today"
     
@@ -178,7 +228,7 @@ module.exports = (robot) ->
               mypushes.push "commit" + push.commitId                   
             msg.send mypushes.join "\n"
     tasks=[]
-    client.getWorkItemIds wiql, projectName, (err, ids) ->
+    client.getWorkItemIds wiql, project, (err, ids) ->
       if err
         console.log err                      
       numTasks = Object.keys(ids).length 
