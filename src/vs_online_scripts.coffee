@@ -2,28 +2,75 @@
 #   A way to interact with Visual Studio Online.
 #
 # Commands:
-#   hubot getbuilds - Will return a list of build definitions in the team project, along with their build number.
+#   hubot show vsonline room defaults - Displays room settings
+#   hubot set vsonline room default <key> = <value> - Sets room setting <key> with value <value>
+#   hubot getbuilds - Will return a list of build definitions, along with their build number.
 #   hubot build <build number> - Triggers a build of the build number specified.
 #   hubot createpbil <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
 #   hubot createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
 #   hubot what have i done today - This will show a list of all tasks that you have updated today
 
-Client = require 'vso-client' 
+Client = require 'vso-client'
+util = require 'util'
 
+VSO_CONFIG_KEYS_WHITE_LIST = [
+  "ProjectName"
+]
+
+class VsoData
+  
+  constructor: (robot) ->
+    @vsoData = robot.brain.data.vsonline ||= 
+      rooms: {}
+      
+  roomDefaults: (room) ->
+    return @vsoData.rooms[room] ||= {}
+    
+  getRoomDefault: (room, key) ->
+    return @vsoData.rooms[room]?[key]
 
 module.exports = (robot) ->  
   projectName = process.env.HUBOT_VSONLINE_PROJECT_NAME	
   username = process.env.HUBOT_VSONLINE_USER_NAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
-  url = "https://" + process.env.HUBOT_VSONLINE_ACCOUNT + ".visualstudio.com"
+  account = process.env.HUBOT_VSONLINE_ACCOUNT
+  url = "https://#{account}.visualstudio.com"
   collection = process.env.HUBOT_COLLECTION_NAME || "DefaultCollection"
 
-  robot.respond /GetBuilds/i, (msg) ->    
+  vsoData = () => @_vsoData ||= new VsoData(robot)
+
+  checkRoomDefault = (msg, key, required = true) ->
+    val = vsoData().getRoomDefault msg.envelope.room, key
+    msg.reply "Error: room default '#{key}' not set" unless val
+    return val
+    
+  robot.respond /show vsonline room defaults/i, (msg)->
+    defaults = vsoData().roomDefaults msg.envelope.room
+    reply = "VSOnline defaults for this room:\n"
+    reply += "#{key}: #{defaults?[key] or 'Not set'} \n" for key in VSO_CONFIG_KEYS_WHITE_LIST
+    msg.reply reply    
+    
+  robot.respond /set vsonline room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
+    return msg.reply "Unknown setting #{msg.match[1]}" unless msg.match[1] in VSO_CONFIG_KEYS_WHITE_LIST
+    defaults =  vsoData().roomDefaults(msg.envelope.room)
+    defaults[msg.match[1]] = msg.match[2]
+    msg.reply "Room default for #{msg.match[1]} set to #{msg.match[2]}"
+    
+  robot.respond /show vsonline projects/i, (msg) ->
+    client = Client.createClient(url, collection, username, password)
+    client.getProjects (err, projects) ->
+      return console.log err if err
+      reply = "VSOnline projects for account #{account}: \n"
+      reply += p.name + "\n" for p in projects
+      msg.reply reply
+
+  robot.respond /GetBuilds/i, (msg) ->
+    return unless projectName = checkRoomDefault msg, "ProjectName"
     definitions=[]
     client = Client.createClient(url, collection, username, password)
-    client.getBuildDefinitions projectName, (err,buildDefinitions) ->            
+    client.getBuildDefinitions (err, buildDefinitions) ->
       if err
-        console.log err            
+        console.log err
       definitions.push "Here are the current build definitions: "              
       for build in buildDefinitions                                           
         definitions.push build.name + ' ' + build.id      
