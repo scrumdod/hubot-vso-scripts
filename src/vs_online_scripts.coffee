@@ -4,7 +4,7 @@
 # Commands:
 #   hubot vso show room defaults - Displays room settings
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
-#   hubot vso getbuilds - Will return a list of build definitions, along with their build number.
+#   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
 #   hubot vso createpbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
 #   hubot vso createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
