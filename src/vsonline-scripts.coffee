@@ -9,6 +9,7 @@
 #   hubot vso createpbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
 #   hubot vso createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
+#   hubot vso show projects - Show the list of team projects
 #
 
 Client = require 'vso-client'
@@ -61,7 +62,7 @@ module.exports = (robot) ->
     defaults[msg.match[1]] = msg.match[2]
     msg.reply "Room default for #{msg.match[1]} set to #{msg.match[2]}"
     
-  robot.respond /show vsonline projects/i, (msg) ->
+  robot.respond /vso show projects/i, (msg) ->
     client = Client.createClient(url, collection, username, password)
     client.getProjects (err, projects) ->
       return console.log err if err
