@@ -1,5 +1,18 @@
-# Desription:
+# Description:
 #   A way to interact with Visual Studio Online.
+#
+# Dependencies:
+#    "node-uuid": "~1.4.1"
+#    "hubot": "~2.7.5"
+#    "vso-client": "~0.1.1"
+#
+# Configuration:
+#   HUBOT_VSONLINE_ACCOUNT - The Visual Studio Online account name (Required)
+#   HUBOT_VSONLINE_USERNAME - Alternate credential username (Required in trust mode)
+#   HUBOT_VSONLINE_PASSWORD - Alternate credential password (Required in trust mode)
+#   HUBOT_VSONLINE_APP_ID - Visual Studion Online application ID (Required in impersonate mode)
+#   HUBOT_VSONLINE_APP_SECRET - Visual Studio Online application secret (Required in impersonate mode)
+#   HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_URL - Visual Studio Online application oauth callback (Required in impersonate mode)
 #
 # Commands:
 #   hubot vso show room defaults - Displays room settings
@@ -13,6 +26,7 @@
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
 #   hubot vso forget my credential - Forgets the OAuth access token 
 #
+# Notes:
 
 Client = require 'vso-client'
 util = require 'util'
@@ -80,7 +94,7 @@ module.exports = (robot) ->
   accountCollection = process.env.HUBOT_VSONLINE_COLLECTION_NAME || "DefaultCollection"
 
   # Required env variables to run in trusted mode
-  username = process.env.HUBOT_VSONLINE_USER_NAME
+  username = process.env.HUBOT_VSONLINE_USERNAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
   
   # Required env variables to run with OAuth (impersonate mode)
@@ -233,7 +247,8 @@ module.exports = (robot) ->
           </html>"""            
         vsoData.removeOAuthState state
         #console.log "Reinjecting message #{util.inspect(stateData)}"
-        robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
+        brainUser = robot.brain.userForId stateData.envelope.user.id
+        robot.receive new TextMessage brainUser, stateData.envelope.message.text
       error: (err, res) ->
         res.send """
           <html>

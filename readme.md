@@ -40,7 +40,7 @@ The required environment variables are
 
 In trust mode we need to set the alternate credentials of the user who  will perform the tasks
 
-+ **HUBOT\_VSONLINE\_USER\_NAME**: The alternate credentials username
++ **HUBOT\_VSONLINE\_USERNAME**: The alternate credentials username
 + **HUBOT\_VSONLINE\_PASSWORD**: The alternate credentials password
 
 *Impersonate Mode*
