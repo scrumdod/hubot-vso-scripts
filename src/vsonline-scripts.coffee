@@ -76,12 +76,14 @@ class VsoData
 
 module.exports = (robot) ->
   # Required env variables
-  username = process.env.HUBOT_VSONLINE_USER_NAME
-  password = process.env.HUBOT_VSONLINE_PASSWORD
   account = process.env.HUBOT_VSONLINE_ACCOUNT
   accountCollection = process.env.HUBOT_VSONLINE_COLLECTION_NAME || "DefaultCollection"
+
+  # Required env variables to run in trusted mode
+  username = process.env.HUBOT_VSONLINE_USER_NAME
+  password = process.env.HUBOT_VSONLINE_PASSWORD
   
-  # OAuth required env variables
+  # Required env variables to run with OAuth (impersonate mode)
   appId = process.env.HUBOT_VSONLINE_APP_ID
   appSecret = process.env.HUBOT_VSONLINE_APP_SECRET
   oauthCallbackUrl = process.env.HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_URL
