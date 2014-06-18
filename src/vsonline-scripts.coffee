@@ -17,7 +17,7 @@
 Client = require 'vso-client'
 util = require 'util'
 uuid = require 'node-uuid'
-{TextMessage} = require 'hubot' 
+{TextMessage} = require 'hubot'
 
 #########################################
 # Constants
@@ -89,8 +89,8 @@ module.exports = (robot) ->
   # OAuth optional env variables
   vssPsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
   authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "preview_api_all preview_msdn_licensing"
-  oauthCallbackPath = process.env.HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_PATH or "/hubot/oauth2/callback"
   
+  oauthCallbackPath = require('url').parse(oauthCallbackUrl).path 
   accessTokenUrl = "#{vssPsBaseUrl}/oauth2/token"
   authorizeUrl = "#{vssPsBaseUrl}/oauth2/authorize"
   accountBaseUrl = "https://#{account}.visualstudio.com"
