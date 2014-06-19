@@ -2,7 +2,7 @@
   "name": "hubot-vso-scripts",
   "version": "0.0.3",
   "description": "Hubot Visual Studio Online Scripts",
-  "main": "./src/vs_online_coffee",
+  "main": "./src/vsonline-scripts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,6 +23,8 @@
   },
   "homepage": "https://github.com/scrumdod/vso-hubotscripts",
   "dependencies": {
-    "vso-client": "0.0.6"
+    "node-uuid": "~1.4.1",
+    "hubot": "~2.7.5",
+    "vso-client": "~0.1.1"
   }
 }
