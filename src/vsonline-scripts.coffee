@@ -247,8 +247,7 @@ module.exports = (robot) ->
           </html>"""            
         vsoData.removeOAuthState state
         #console.log "Reinjecting message #{util.inspect(stateData)}"
-        brainUser = robot.brain.userForId stateData.envelope.user.id
-        robot.receive new TextMessage brainUser, stateData.envelope.message.text
+        robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
       error: (err, res) ->
         res.send """
           <html>
