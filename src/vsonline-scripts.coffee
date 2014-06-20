@@ -122,13 +122,15 @@ module.exports = (robot) ->
   vssPsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
   authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "preview_api_all preview_msdn_licensing"
   
-  oauthCallbackPath = require('url').parse(oauthCallbackUrl).path 
-  accessTokenUrl = "#{vssPsBaseUrl}/oauth2/token"
-  authorizeUrl = "#{vssPsBaseUrl}/oauth2/authorize"
-  accountBaseUrl = "https://#{account}.visualstudio.com"
   impersonate = if appId then true else false
-  
   robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
+  
+  if impersonate
+    oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
+    accessTokenUrl = "#{vssPsBaseUrl}/oauth2/token"
+    authorizeUrl = "#{vssPsBaseUrl}/oauth2/authorize"
+    accountBaseUrl = "https://#{account}.visualstudio.com"
+  
 
   vsoData = new VsoData(robot)
 
@@ -239,7 +241,7 @@ module.exports = (robot) ->
   #########################################
   # OAuth call back endpoint
   #########################################
-  robot.router.get oauthCallbackPath, (req, res) ->
+  if impersonate then robot.router.get oauthCallbackPath, (req, res) ->
     
     # check state argument
     state = req?.query?.state
@@ -262,7 +264,6 @@ module.exports = (robot) ->
             </body>
           </html>"""            
         vsoData.removeOAuthState state
-        #console.log "Reinjecting message #{util.inspect(stateData)}"
         robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
       error: (err, res) ->
         res.send """
