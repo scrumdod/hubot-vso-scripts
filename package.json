@@ -1,6 +1,6 @@
 {
   "name": "hubot-vso-scripts",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Hubot Visual Studio Online Scripts",
   "main": "./src/vsonline-scripts",
   "scripts": {
@@ -24,7 +24,6 @@
   "homepage": "https://github.com/scrumdod/vso-hubotscripts",
   "dependencies": {
     "node-uuid": "~1.4.1",
-    "hubot": "~2.7.5",
     "vso-client": "~0.1.1"
   }
 }

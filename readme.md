@@ -57,6 +57,6 @@ application in Visual Studio Online
 
 ### License
 
-TODO
+MIT
 
 
