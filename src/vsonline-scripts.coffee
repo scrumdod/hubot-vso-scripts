@@ -50,16 +50,32 @@ VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 class VsoData
   
   constructor: (robot) ->
+  
+    ensureVsoData = ()=>
+      robot.logger.debug "Ensuring vso data correct structure"
+      @vsoData ||= {}    
+      @vsoData.rooms ||= {}
+      @vsoData.authorizations ||= {}
+      @vsoData.authorizations.states ||= {}
+      @vsoData.authorizations.users ||= {}
+      robot.brain.set 'vsonline', @vsoData 
+  
+    # try to read vso data from brain
+    @loaded = false
     @vsoData = robot.brain.get 'vsonline'
-    unless @vsoData
-      @vsoData = {}
-      robot.brain.set 'vsonline', @vsoData
+    if not @vsoData
+      ensureVsoData()
+      # and now subscribe for the onload for cases where brain is loading yet
+      robot.brain.on 'loaded', =>
+        return if @loaded is true
+        robot.logger.debug "Brain loaded. Recreate vso data with the data loaded from brain"
+        @loaded = true
+        @vsoData = robot.brain.get 'vsonline'
+        ensureVsoData()
+    else
+      ensureVsoData()
       
-    @vsoData.rooms ||= {}
-    @vsoData.authorizations ||= {}
-    @vsoData.authorizations.states ||= {}
-    @vsoData.authorizations.users ||= {} 
-    
+            
   roomDefaults: (room) ->
     @vsoData.rooms[room] ||= {}
     
