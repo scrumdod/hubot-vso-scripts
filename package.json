@@ -1,6 +1,6 @@
 {
   "name": "hubot-vso-scripts",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Hubot Visual Studio Online Scripts",
   "main": "index.coffee",
   "scripts": {
