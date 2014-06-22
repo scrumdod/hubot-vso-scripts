@@ -2,7 +2,7 @@
   "name": "hubot-vso-scripts",
   "version": "0.0.7",
   "description": "Hubot Visual Studio Online Scripts",
-  "main": "./src/vsonline-scripts",
+  "main": "index.coffee",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
