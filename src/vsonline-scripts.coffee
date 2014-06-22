@@ -19,8 +19,11 @@
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
-#   hubot vso createpbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
-#   hubot vso createbug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso create pbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
+#   hubot vso create bug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso create feature <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso create task <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso create impediment <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
 #   hubot vso show projects - Show the list of team projects
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
@@ -124,16 +127,14 @@ module.exports = (robot) ->
   
   impersonate = if appId then true else false
   robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
-  
+
   accountBaseUrl = "https://#{account}.visualstudio.com"
   
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
     accessTokenUrl = "#{vssPsBaseUrl}/oauth2/token"
     authorizeUrl = "#{vssPsBaseUrl}/oauth2/authorize"
-
   
-
   vsoData = new VsoData(robot)
 
   robot.on 'error', (err, msg) ->
@@ -321,7 +322,7 @@ module.exports = (robot) ->
         msg.reply reply
 
   #########################################
-  # Builds related commands
+  # Build related commands
   #########################################
   robot.respond /vso show builds/i, (msg) ->
     runVsoCmd msg, cmd: (client) ->
@@ -348,9 +349,9 @@ module.exports = (robot) ->
         msg.reply "Build queued.  Hope you you don't break the build! " + buildResponse.url
 
   #########################################
-  # Builds related commands
+  # WIT related commands
   #########################################
-  robot.respond /vso CreatePBI (.*) (with description) (.*)/i, (msg) ->
+  robot.respond /vso Create PBI (.*) (with description)? (.*)?/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
 
     runVsoCmd msg, cmd: (client) ->
@@ -402,10 +403,191 @@ module.exports = (robot) ->
       workItem.fields.push descriptionField
 
       client.createWorkItem workItem, (err, createdWorkItem) ->
+        console.log createdWorkItem
         return handleVsoError msg, err if err
         msg.reply "PBI " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
 
-  robot.respond /vso CreateBug (.*) (with description) (.*)/i, (msg) ->
+  robot.respond /vso Create Task (.*) (with description)? (.*)?/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+
+    runVsoCmd msg, cmd: (client) ->
+      title = msg.match[1]
+      descriptions = msg.match[3]
+      workItem=
+        fields : []
+
+      titleField=
+        field :
+          refName : "System.Title"
+        value :  title
+      workItem.fields.push titleField
+    
+      typeField=
+        field :
+          refName : "System.WorkItemType"
+        value :  "Task"
+      workItem.fields.push typeField
+
+      stateField=
+        field:
+          refName : "System.State"
+        value :  "To Do"
+      workItem.fields.push stateField
+
+      reasonField=
+        field:
+          refName : "System.Reason"
+        value :  "New Task"
+      workItem.fields.push reasonField
+
+      areaField=
+        field:
+          refName : "System.AreaPath"
+        value :  project
+      workItem.fields.push areaField
+
+      iterationField=
+        field:
+          refName : "System.IterationPath"
+        value :  project
+      workItem.fields.push iterationField
+
+      descriptionField=
+        field:
+          refName : "System.Description"
+        value :  descriptions
+      workItem.fields.push descriptionField
+
+      client.createWorkItem workItem, (err, createdWorkItem) ->
+        console.log createdWorkItem
+        return handleVsoError msg, err if err
+        msg.reply "Task " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
+
+  robot.respond /vso Create Feature (.*) (with description)? (.*)?/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+
+    runVsoCmd msg, cmd: (client) ->
+      title = msg.match[1]
+      descriptions = msg.match[3]
+      workItem=
+        fields : []
+
+      titleField=
+        field :
+          refName : "System.Title"
+        value :  title
+      workItem.fields.push titleField
+
+      priorityField =
+        field : 
+          refName : "Microsoft.VSTS.Common.Priority"
+      value : 2
+      workItem.fields.push priorityField
+    
+      typeField=
+        field :
+          refName : "System.WorkItemType"
+        value :  "Feature"
+      workItem.fields.push typeField
+
+      stateField=
+        field:
+          refName : "System.State"
+        value :  "New"
+      workItem.fields.push stateField
+
+      reasonField=
+        field:
+          refName : "System.Reason"
+        value :  "New Feature"
+      workItem.fields.push reasonField
+
+      areaField=
+        field:
+          refName : "System.AreaPath"
+        value :  project
+      workItem.fields.push areaField
+
+      iterationField=
+        field:
+          refName : "System.IterationPath"
+        value :  project
+      workItem.fields.push iterationField
+
+      descriptionField=
+        field:
+          refName : "System.Description"
+        value :  descriptions
+      workItem.fields.push descriptionField
+
+      client.createWorkItem workItem, (err, createdWorkItem) ->
+        console.log createdWorkItem
+        return handleVsoError msg, err if err
+        msg.reply "Feature " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
+
+  robot.respond /vso Create Impediment (.*) (with description)? (.*)?/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+
+    runVsoCmd msg, cmd: (client) ->
+      title = msg.match[1]
+      descriptions = msg.match[3]
+      workItem=
+        fields : []
+
+      titleField=
+        field :
+          refName : "System.Title"
+        value :  title
+      workItem.fields.push titleField
+
+      priorityField =
+        field : 
+          refName : "Microsoft.VSTS.Common.Priority"
+      value : 2
+      workItem.fields.push priorityField
+    
+      typeField=
+        field :
+          refName : "System.WorkItemType"
+        value :  "Feature"
+      workItem.fields.push typeField
+
+      stateField=
+        field:
+          refName : "System.State"
+        value :  "New"
+      workItem.fields.push stateField
+
+      reasonField=
+        field:
+          refName : "System.Reason"
+        value :  "New Feature"
+      workItem.fields.push reasonField
+
+      areaField=
+        field:
+          refName : "System.AreaPath"
+        value :  project
+      workItem.fields.push areaField
+
+      iterationField=
+        field:
+          refName : "System.IterationPath"
+        value :  project
+      workItem.fields.push iterationField
+
+      descriptionField=
+        field:
+          refName : "System.Description"
+        value :  descriptions
+      workItem.fields.push descriptionField
+
+      client.createWorkItem workItem, (err, createdWorkItem) ->
+        console.log createdWorkItem
+        return handleVsoError msg, err if err
+        msg.reply "Impediment " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
+
+  robot.respond /vso Create Bug (.*) (with description) (.*)/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
     
     runVsoCmd msg, cmd: (client)->
@@ -456,7 +638,7 @@ module.exports = (robot) ->
         value :  descriptions
       workItem.fields.push descriptionField
                
-      client.createWorkItem workItem, (err,createdWorkItem) ->
+      client.createWorkItem workItem, (err,createdWorkItem) ->        
         return handleVsoError msg, err if err
         msg.send "BUG " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
     
