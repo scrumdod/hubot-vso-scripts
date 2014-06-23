@@ -356,296 +356,55 @@ module.exports = (robot) ->
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso Create PBI (.*) (with description)? (.*)?/i, (msg) ->
+  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (.*) (with description)? (.*)?/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
+	
+    addField = (wi, wi_refName, val) ->
+      workItemField=
+        field: 
+          refName : wi_refName
+        value : val
+      wi.fields.push workItemField
 
     runVsoCmd msg, cmd: (client) ->
-      title = msg.match[1]
-      descriptions = msg.match[3]
+      title = msg.match[2]
+      description = msg.match[4]
       workItem=
         fields : []
+		
+      addField workItem, "System.Title", title          
+      addField workItem, "System.AreaPath", project
+      addField workItem, "System.IterationPath", project
+      addField workItem, "System.Description", description
+		
+      switch msg.match[1]      
+        when "pbi"
+          addField workItem, "System.WorkItemType", "Product Backlog Item"
+          addField workItem, "System.State", "New"
+          addField workItem, "System.Reason", "New Backlog Item"
+        when "task"
+          addField workItem, "System.WorkItemType", "Task"
+          addField workItem, "System.State", "To Do"
+          addField workItem, "System.Reason", "New Task"
+        when "feature"
+          addField workItem, "System.WorkItemType", "Feature"
+          addField workItem, "System.State", "New"
+          addField workItem, "System.Reason", "New Feature"
+          addField workItem, "Microsoft.VSTS.Common.Priority","2"
+        when "impediment"
+          addField workItem, "System.WorkItemType", "Impediment"
+          addField workItem, "System.State", "Open"
+          addField workItem, "System.Reason", "New Impediment"
+          addField workItem, "Microsoft.VSTS.Common.Priority","2"
+        when "bug"
+          addField workItem, "System.WorkItemType", "Bug"
+          addField workItem, "System.State", "New"
+          addField workItem, "System.Reason", "New Defect Reported"          
 
-      titleField=
-        field :
-          refName : "System.Title"
-        value :  title
-      workItem.fields.push titleField
-    
-      typeField=
-        field :
-          refName : "System.WorkItemType"
-        value :  "Product Backlog Item"
-      workItem.fields.push typeField
-
-      stateField=
-        field:
-          refName : "System.State"
-        value :  "New"
-      workItem.fields.push stateField
-
-      reasonField=
-        field:
-          refName : "System.Reason"
-        value :  "New Backlog Item"
-      workItem.fields.push reasonField
-
-      areaField=
-        field:
-          refName : "System.AreaPath"
-        value :  project
-      workItem.fields.push areaField
-
-      iterationField=
-        field:
-          refName : "System.IterationPath"
-        value :  project
-      workItem.fields.push iterationField
-
-      descriptionField=
-        field:
-          refName : "System.Description"
-        value :  descriptions
-      workItem.fields.push descriptionField
-
-      client.createWorkItem workItem, (err, createdWorkItem) ->
-        console.log createdWorkItem
+		  
+      client.createWorkItem workItem, (err, createdWorkItem) ->        
         return handleVsoError msg, err if err
-        msg.reply "PBI " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
-
-  robot.respond /vso Create Task (.*) (with description)? (.*)?/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
-
-    runVsoCmd msg, cmd: (client) ->
-      title = msg.match[1]
-      descriptions = msg.match[3]
-      workItem=
-        fields : []
-
-      titleField=
-        field :
-          refName : "System.Title"
-        value :  title
-      workItem.fields.push titleField
-    
-      typeField=
-        field :
-          refName : "System.WorkItemType"
-        value :  "Task"
-      workItem.fields.push typeField
-
-      stateField=
-        field:
-          refName : "System.State"
-        value :  "To Do"
-      workItem.fields.push stateField
-
-      reasonField=
-        field:
-          refName : "System.Reason"
-        value :  "New Task"
-      workItem.fields.push reasonField
-
-      areaField=
-        field:
-          refName : "System.AreaPath"
-        value :  project
-      workItem.fields.push areaField
-
-      iterationField=
-        field:
-          refName : "System.IterationPath"
-        value :  project
-      workItem.fields.push iterationField
-
-      descriptionField=
-        field:
-          refName : "System.Description"
-        value :  descriptions
-      workItem.fields.push descriptionField
-
-      client.createWorkItem workItem, (err, createdWorkItem) ->
-        console.log createdWorkItem
-        return handleVsoError msg, err if err
-        msg.reply "Task " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
-
-  robot.respond /vso Create Feature (.*) (with description)? (.*)?/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
-
-    runVsoCmd msg, cmd: (client) ->
-      title = msg.match[1]
-      descriptions = msg.match[3]
-      workItem=
-        fields : []
-
-      titleField=
-        field :
-          refName : "System.Title"
-        value :  title
-      workItem.fields.push titleField
-
-      priorityField =
-        field : 
-          refName : "Microsoft.VSTS.Common.Priority"
-      value : 2
-      workItem.fields.push priorityField
-    
-      typeField=
-        field :
-          refName : "System.WorkItemType"
-        value :  "Feature"
-      workItem.fields.push typeField
-
-      stateField=
-        field:
-          refName : "System.State"
-        value :  "New"
-      workItem.fields.push stateField
-
-      reasonField=
-        field:
-          refName : "System.Reason"
-        value :  "New Feature"
-      workItem.fields.push reasonField
-
-      areaField=
-        field:
-          refName : "System.AreaPath"
-        value :  project
-      workItem.fields.push areaField
-
-      iterationField=
-        field:
-          refName : "System.IterationPath"
-        value :  project
-      workItem.fields.push iterationField
-
-      descriptionField=
-        field:
-          refName : "System.Description"
-        value :  descriptions
-      workItem.fields.push descriptionField
-
-      client.createWorkItem workItem, (err, createdWorkItem) ->
-        console.log createdWorkItem
-        return handleVsoError msg, err if err
-        msg.reply "Feature " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
-
-  robot.respond /vso Create Impediment (.*) (with description)? (.*)?/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
-
-    runVsoCmd msg, cmd: (client) ->
-      title = msg.match[1]
-      descriptions = msg.match[3]
-      workItem=
-        fields : []
-
-      titleField=
-        field :
-          refName : "System.Title"
-        value :  title
-      workItem.fields.push titleField
-
-      priorityField =
-        field : 
-          refName : "Microsoft.VSTS.Common.Priority"
-      value : 2
-      workItem.fields.push priorityField
-    
-      typeField=
-        field :
-          refName : "System.WorkItemType"
-        value :  "Feature"
-      workItem.fields.push typeField
-
-      stateField=
-        field:
-          refName : "System.State"
-        value :  "New"
-      workItem.fields.push stateField
-
-      reasonField=
-        field:
-          refName : "System.Reason"
-        value :  "New Feature"
-      workItem.fields.push reasonField
-
-      areaField=
-        field:
-          refName : "System.AreaPath"
-        value :  project
-      workItem.fields.push areaField
-
-      iterationField=
-        field:
-          refName : "System.IterationPath"
-        value :  project
-      workItem.fields.push iterationField
-
-      descriptionField=
-        field:
-          refName : "System.Description"
-        value :  descriptions
-      workItem.fields.push descriptionField
-
-      client.createWorkItem workItem, (err, createdWorkItem) ->
-        console.log createdWorkItem
-        return handleVsoError msg, err if err
-        msg.reply "Impediment " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
-
-  robot.respond /vso Create Bug (.*) (with description) (.*)/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
-    
-    runVsoCmd msg, cmd: (client)->
-      title = msg.match[1]
-      descriptions = msg.match[3]
-      workItem=
-        fields : []
-
-      titleField=
-        field :
-          refName : "System.Title"
-        value :  title
-      workItem.fields.push titleField
-    
-      typeField=
-        field :
-          refName : "System.WorkItemType"
-        value :  "Bug"
-      workItem.fields.push typeField
-
-      stateField=
-        field:
-          refName : "System.State"
-        value :  "New"
-      workItem.fields.push stateField
-
-      reasonField=
-        field:
-          refName : "System.Reason"
-        value :  "New Defect Reported"
-      workItem.fields.push reasonField
-
-      areaField=
-        field:
-          refName : "System.AreaPath"
-        value :  project
-      workItem.fields.push areaField
-
-      iterationField=
-        field:
-          refName : "System.IterationPath"
-        value :  project
-      workItem.fields.push iterationField
-
-      descriptionField=
-        field:
-          refName : "System.Description"
-        value :  descriptions
-      workItem.fields.push descriptionField
-               
-      client.createWorkItem workItem, (err,createdWorkItem) ->        
-        return handleVsoError msg, err if err
-        msg.send "BUG " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl
+        msg.reply msg.match[1] + " " + createdWorkItem.id + " created.  " + createdWorkItem.webUrl		     
     
   robot.respond /vso What have I done today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
