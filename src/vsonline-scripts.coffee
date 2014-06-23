@@ -19,11 +19,7 @@
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
-#   hubot vso create pbi <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
-#   hubot vso create bug <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
-#   hubot vso create feature <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
-#   hubot vso create task <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
-#   hubot vso create impediment <title> with description <description> - Create a Bug work item with the title and description specified.  This will put it in the root areapath and iteration
+#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
 #   hubot vso show projects - Show the list of team projects
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
