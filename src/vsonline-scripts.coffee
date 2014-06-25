@@ -128,8 +128,6 @@ module.exports = (robot) ->
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
   robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
-
-  accountBaseUrl = "https://#{account}.visualstudio.com"
   
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
@@ -168,7 +166,8 @@ module.exports = (robot) ->
       
   getVsoOAuthAccessToken = ({user, assertion, refresh, success, error}) ->
     tokenOperation = if refresh then Client.refreshToken else Client.getToken
-    tokenOperation appSecret, assertion, oauthCallbackUrl, (err, res) ->
+    
+    tokenOperationCallback =  (err, res) ->
       unless err or res.Error? 
         token = res
         expires_at = new Date
@@ -181,6 +180,9 @@ module.exports = (robot) ->
       else
         robot.logger.error "Error getting VSO oauth token: #{util.inspect(err or res.Error)}"
         error(err, res) if typeof error is "function"
+    
+    tokenOperation appSecret, assertion, oauthCallbackUrl, tokenOperationCallback, accessTokenUrl
+        
         
   accessTokenExpired = (user) ->
     token = vsoData.getOAuthTokenForUser(user.id)
@@ -269,12 +271,12 @@ module.exports = (robot) ->
           </html>"""            
         vsoData.removeOAuthState state
         robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
-      error: (err, res) ->
+      error: (err, resVso) ->
         res.send """
           <html>
             <body>
             <p>Ooops! It wasn't possible to get an OAuth access token for you.</p>
-            <p>Error returned from VSO: #{util.inspect(err or res.Error)}</p>
+            <p>Error returned from VSO: #{util.inspect(err or resVso.Error)}</p>
             </body>
           </html>"""
           
