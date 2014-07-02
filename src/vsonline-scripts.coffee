@@ -349,7 +349,7 @@ module.exports = (robot) ->
 
       client.queueBuild buildRequest, (err, buildResponse) ->
         return handleVsoError msg, err if err
-        msg.reply "Build queued.  Hope you you don't break the build! " + buildResponse.url
+        msg.reply "Build queued.  Hope you don't break the build! " + buildResponse.url
 
   #########################################
   # WIT related commands
