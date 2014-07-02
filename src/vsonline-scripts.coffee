@@ -379,24 +379,24 @@ module.exports = (robot) ->
           addField workItem, "System.WorkItemType", "Product Backlog Item"
           addField workItem, "System.State", "New"
           addField workItem, "System.Reason", "New Backlog Item"
-		  addField workItem, "System.Description", description
+          addField workItem, "System.Description", description
         when "task"
           addField workItem, "System.WorkItemType", "Task"
           addField workItem, "System.State", "To Do"
           addField workItem, "System.Reason", "New Task"
-		  addField workItem, "System.Description", description
+          addField workItem, "System.Description", description
         when "feature"
           addField workItem, "System.WorkItemType", "Feature"
           addField workItem, "System.State", "New"
           addField workItem, "System.Reason", "New Feature"
           addField workItem, "Microsoft.VSTS.Common.Priority","2"
-		  addField workItem, "System.Description", description
+          addField workItem, "System.Description", description
         when "impediment"
           addField workItem, "System.WorkItemType", "Impediment"
           addField workItem, "System.State", "Open"
           addField workItem, "System.Reason", "New Impediment"
           addField workItem, "Microsoft.VSTS.Common.Priority","2"
-		  addField workItem, "System.Description", description
+          addField workItem, "System.Description", description
         when "bug"
           addField workItem, "System.WorkItemType", "Bug"
           addField workItem, "System.State", "New"
