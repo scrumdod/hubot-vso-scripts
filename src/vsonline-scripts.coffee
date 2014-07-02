@@ -122,7 +122,7 @@ module.exports = (robot) ->
   oauthCallbackUrl = process.env.HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_URL
   
   # OAuth optional env variables
-  vssPsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
+  spsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
   authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "preview_api_all preview_msdn_licensing"
   
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
@@ -131,8 +131,8 @@ module.exports = (robot) ->
   
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
-    accessTokenUrl = "#{vssPsBaseUrl}/oauth2/token"
-    authorizeUrl = "#{vssPsBaseUrl}/oauth2/authorize"
+    accessTokenUrl = "#{spsBaseUrl}/oauth2/token"
+    authorizeUrl = "#{spsBaseUrl}/oauth2/authorize"
   
   vsoData = new VsoData(robot)
 
@@ -199,7 +199,7 @@ module.exports = (robot) ->
     
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
-      Client.createOAuthClient url, collection, token.access_token
+      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl }
     else
       Client.createClient url, collection, username, password
   
@@ -288,7 +288,7 @@ module.exports = (robot) ->
       return msg.reply "It's not possible to know who you are since I'm running \
       with no impersonate mode."
 
-    runVsoCmd msg, url: vssPsBaseUrl, collection: "/", cmd: (client) ->
+    runVsoCmd msg, cmd: (client) ->
       client.getCurrentProfile (err, res) ->
         return handleVsoError msg, err if err
         msg.reply "You're #{res.displayName} \
