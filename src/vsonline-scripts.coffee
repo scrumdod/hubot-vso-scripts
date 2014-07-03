@@ -333,9 +333,9 @@ module.exports = (robot) ->
       client.getBuildDefinitions (err, buildDefinitions) ->
         return handleVsoError msg, err if err
         
-        definitions.push "Here are the current build definitions: "
+        definitions.push "Here are the current build definitions : (id -> build definition name)"
         for build in buildDefinitions
-          definitions.push build.name + ' ' + build.id
+          definitions.push build.id + ' -> ' + build.name 
         msg.reply definitions.join "\n"
 
   robot.respond /vso build (.*)/i, (msg) ->
@@ -349,7 +349,7 @@ module.exports = (robot) ->
 
       client.queueBuild buildRequest, (err, buildResponse) ->
         return handleVsoError msg, err if err
-        msg.reply "Build queued.  Hope you you don't break the build! " + buildResponse.url
+        msg.reply "Build queued.  Hope you don't break the build! " + buildResponse.url
 
   #########################################
   # WIT related commands
