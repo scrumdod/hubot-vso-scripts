@@ -19,8 +19,9 @@
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
-#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog work item with the title and descriptions specified.  This will put it in the root areapath and iteration
+#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and descriptions specified.  This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
+#   hubot vso show commits in last <num> day|s - This will show a list of commits that you have made in the last <num> days
 #   hubot vso show projects - Show the list of team projects
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
 #   hubot vso forget my credential - Forgets the OAuth access token 
@@ -420,22 +421,17 @@ module.exports = (robot) ->
         select [System.Id], [System.WorkItemType], [System.Title], [System.AssignedTo], [System.State], \
         [System.Tags] from WorkItems where [System.WorkItemType] = 'Task' and [System.ChangedBy] = @me \
         and [System.ChangedDate] = @today"
-    
-      #console.log wiql
-
-      client.getRepositories null, (err,repositories) ->
-        return handleVsoError msg, err if err
+              
+      getCommitsForUser 1, msg, (pushes) ->
+        numPushes = Object.keys(pushes).length
         mypushes=[]
-        today = yesterdayDate()
-        for repo in repositories
-          client.getCommits repo.id, null, myuser, null,today,(err,pushes) ->
-            return handleVsoError msg, err if err
-            numPushes = Object.keys(pushes).length
-            if numPushes > 0
-              mypushes.push "You have written code! These are your commits for the " + repo.name + " repo"
-              for push in pushes
-                mypushes.push "commit" + push.commitId
-              msg.reply mypushes.join "\n"
+        if numPushes > 0
+          mypushes.push "You have written code! These are your commits "
+          for push in pushes
+            mypushes.push push.url
+          msg.reply mypushes.join "\n"
+        else
+          msg.reply "sorry, you have not committed anything.  Are you sure that you are a dev?"     
               
       tasks=[]
       client.getWorkItemIds wiql, project, (err, ids) ->
@@ -457,11 +453,36 @@ module.exports = (robot) ->
                     msg.reply tasks.join "\n"
         else
           msg.reply "You haven't worked on any task today"
+      
+  robot.respond /vso Show commits in last (\d+) (day|days)/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+    getCommitsForUser msg.match[1], msg, (pushes) ->
+      numPushes = Object.keys(pushes).length
+      mypushes=[]
+      if numPushes > 0
+        mypushes.push "You have written code! These are your commits "
+        for push in pushes
+          mypushes.push push.url          
+        msg.reply mypushes.join "\n"
+      else
+        msg.reply "sorry, you have not committed anything.  Are you sure that you are a dev?"
 
 
+  getCommitsForUser = (sinceDays, msg, callback) ->
+    runVsoCmd msg, cmd: (client) ->
+      #TODO - we need to change to get the user profile from VSO
+      myuser = msg.message.user.displayName      
+      dateToSearchFrom = getStartDate(sinceDays)
+      client.getRepositories null, (err,repositories) ->
+        return handleVsoError msg, err if err
+        for repo in repositories          
+          client.getCommits repo.id, null, myuser, null,dateToSearchFrom,(err,commits) ->
+            return handleVsoError msg, err if err
+            callback commits
 
-yesterdayDate = () ->
+
+getStartDate = (numDays) ->
   date = new Date()
-  date.setDate(date.getDate() - 1)
+  date.setDate(date.getDate() - numDays)
   date.setUTCHours(0,0,0,0)
   date.toISOString()
