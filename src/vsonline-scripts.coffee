@@ -371,7 +371,7 @@ module.exports = (robot) ->
       workItem=
         fields : []
 
-	  description = description.replace(/\n/g,"<br/>") if description
+      description = description.replace(/\n/g,"<br/>") if description
 						
       addField workItem, "System.Title", title          
       addField workItem, "System.AreaPath", project
