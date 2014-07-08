@@ -355,7 +355,7 @@ module.exports = (robot) ->
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (.*) (with description)? (.*)?/i, (msg) ->
+  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (.*) (with description)? ([\s\S]*)?/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
 	
     addField = (wi, wi_refName, val) ->
@@ -370,7 +370,9 @@ module.exports = (robot) ->
       description = msg.match[4]
       workItem=
         fields : []
-		
+
+      description = description.replace(/\n/g,"<br/>") if description
+						
       addField workItem, "System.Title", title          
       addField workItem, "System.AreaPath", project
       addField workItem, "System.IterationPath", project      
