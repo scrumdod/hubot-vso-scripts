@@ -452,7 +452,8 @@ module.exports = (robot) ->
                 for item in task.fields
                   if item.field.name == "Title"
                     tasks.push item.value
-                    msg.reply tasks.join "\n"
+              
+              msg.reply tasks.join "\n"
         else
           msg.reply "You haven't worked on any task today"
       
