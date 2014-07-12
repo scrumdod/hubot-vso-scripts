@@ -335,10 +335,13 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
       client.getBuildDefinitions (err, buildDefinitions) ->
         return handleVsoError msg, err if err
         
-        definitions.push "Here are the current build definitions : (id -> build definition name)"
-        for build in buildDefinitions
-          definitions.push build.id + ' -> ' + build.name 
-        msg.reply definitions.join "\n"
+        if buildDefinitions.length == 0
+          msg.reply "No build definitions exist"
+        else        
+          definitions.push "Here are the current build definitions : (id -> build definition name)"
+          for build in buildDefinitions
+            definitions.push build.id + ' -> ' + build.name
+          msg.reply definitions.join "\n"
 
   robot.respond /vso build (.*)/i, (msg) ->
     buildId = msg.match[1]
