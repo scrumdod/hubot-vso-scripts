@@ -273,6 +273,7 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
         vsoData.removeOAuthState state
         robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
       error: (err, resVso) ->
+        robot.logger.error "Failed to get OAuth access token: " + util.inspect(err or resVso.Error)
         res.send """
           <html>
             <body>
