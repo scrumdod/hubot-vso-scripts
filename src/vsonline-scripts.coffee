@@ -151,10 +151,10 @@ module.exports = (robot) ->
     
   buildVsoAuthorizationUrl = (state)->
     "#{authorizeUrl}?\
-      client_id=#{appId}\
-      &response_type=Assertion&state=#{state}\
-      &scope=#{escape(authorizedScopes)}\
-      &redirect_uri=#{escape(oauthCallbackUrl)}"
+client_id=#{appId}\
+&response_type=Assertion&state=#{state}\
+&scope=#{escape(authorizedScopes)}\
+&redirect_uri=#{escape(oauthCallbackUrl)}"
       
   askForVsoAuthorization = (msg) ->
     state = uuid.v1().toString()
@@ -162,8 +162,8 @@ module.exports = (robot) ->
       createdAt: new Date
       envelope: msg.envelope
     vsoAuthorizeUrl = buildVsoAuthorizationUrl state
-    return msg.reply "I don't know who you are in Visual Studio Online.
-      Click the link to authenticate #{vsoAuthorizeUrl}"
+    return msg.reply "I don't know who you are in Visual Studio Online.\n
+Click the link to authenticate and authorize " + robot.name + " to operate on your behalf\n#{vsoAuthorizeUrl}"
       
   getVsoOAuthAccessToken = ({user, assertion, refresh, success, error}) ->
     tokenOperation = if refresh then Client.refreshToken else Client.getToken
