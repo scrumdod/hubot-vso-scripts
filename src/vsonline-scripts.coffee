@@ -20,8 +20,8 @@
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
 #   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and descriptions specified.  This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
-#   hubot vso what have i done today - This will show a list of all tasks that you have updated today
-#   hubot vso show commits in last <num> day|s - This will show a list of commits that you have made in the last <num> days
+#   hubot vso what have i done today - This will show a list of all tasks and git commits that you have updated today
+#   hubot vso show commits in last <num> day|s - This will show a list of git commits that you have made in the last <num> days
 #   hubot vso show projects - Show the list of team projects
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
 #   hubot vso forget my credential - Forgets the OAuth access token 
@@ -430,16 +430,16 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
         [System.Tags] from WorkItems where [System.WorkItemType] = 'Task' and [System.ChangedBy] = @me \
         and [System.ChangedDate] = @today"
               
-      getCommitsForUser 1, msg, (pushes) ->
+      getCommitsForUser 1, msg, (pushes, repo) ->
         numPushes = Object.keys(pushes).length
         mypushes=[]
         if numPushes > 0
-          mypushes.push "You have written code! These are your commits "
+          mypushes.push "You have written code! These are your commits in " + repo.name + " repo."
           for push in pushes
-            mypushes.push push.url
+            mypushes.push formatGitCommit(push)
           msg.reply mypushes.join "\n"
         else
-          msg.reply "sorry, you have not committed anything.  Are you sure that you are a dev?"     
+          msg.reply "sorry, you have not committed anything in " + repo.name + " repo.  Are you sure that you are a dev?"     
               
       tasks=[]
       client.getWorkItemIds wiql, project, (err, ids) ->
@@ -464,18 +464,25 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
           msg.reply "You haven't worked on any task today"
       
   robot.respond /vso Show commits in last (\d+) (day|days)/i, (msg) ->
-    return unless project = checkRoomDefault msg, "project"
-    getCommitsForUser msg.match[1], msg, (pushes) ->
+    getCommitsForUser msg.match[1], msg, (pushes, repo) ->
       numPushes = Object.keys(pushes).length
       mypushes=[]
       if numPushes > 0
-        mypushes.push "You have written code! These are your commits "
+        mypushes.push "You have written code! These are your commits in " + repo.name + " repo:"
         for push in pushes
-          mypushes.push push.url          
+          mypushes.push formatGitCommit(push)
         msg.reply mypushes.join "\n"
       else
-        msg.reply "sorry, you have not committed anything.  Are you sure that you are a dev?"
+        msg.reply "sorry, you have not committed anything in " + repo.name + " repo.  Are you sure that you are a dev?"
 
+
+  formatGitCommit = (push) ->
+    if push.comment.length > 77
+      comment = push.comment.substring(0,77) + "..."
+    else
+      comment = push.comment
+    
+    return comment + " " + push.url
 
   getCommitsForUser = (sinceDays, msg, callback) ->
     runVsoCmd msg, cmd: (client) ->
@@ -484,10 +491,13 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
       dateToSearchFrom = getStartDate(sinceDays)
       client.getRepositories null, (err,repositories) ->
         return handleVsoError msg, err if err
-        for repo in repositories          
-          client.getCommits repo.id, null, myuser, null,dateToSearchFrom,(err,commits) ->
+
+        # use forEach to have a closure for repo        
+        repositories.forEach (repo) ->
+          client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
             return handleVsoError msg, err if err
-            callback commits
+            callback commits, repo
+
 
   #########################################
   # Visual Studio Online Status related commands
