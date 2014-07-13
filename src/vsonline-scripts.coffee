@@ -25,12 +25,14 @@
 #   hubot vso show projects - Show the list of team projects
 #   hubot vso who am i - Show user info as seen in Visual Studio Online user profile
 #   hubot vso forget my credential - Forgets the OAuth access token 
+#   hubot vso show status - Show the status of Visual Studio Online Services
 #
 # Notes:
 
 Client = require 'vso-client'
 util = require 'util'
 uuid = require 'node-uuid'
+request = require 'request'
 {TextMessage} = require 'hubot'
 
 #########################################
@@ -486,6 +488,25 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
           client.getCommits repo.id, null, myuser, null,dateToSearchFrom,(err,commits) ->
             return handleVsoError msg, err if err
             callback commits
+
+  #########################################
+  # Visual Studio Online Status related commands
+  #########################################
+  robot.respond /vso show status/i, (msg) ->
+    request "https://www.windowsazurestatus.com/odata/ServiceCurrentIncidents?api-version=1.0&$filter=startswith(Name,'#{escape("Visual Studio")}')" , (err, response, body) ->
+      if(err)
+        robot.logger.error "Error getting status: #{util.inspect(err)}"
+        msg.reply "Failed to get Visual Studio Online status: " + err
+      else
+        if response.statusCode == 200
+          status = JSON.parse body      
+          serviceStatusResponse = "Here is the status of Visual Studio Online\n"
+          for vsoService in status.value
+            serviceStatusResponse += vsoService.Name + " -> Status: " + vsoService.Status + "\n"
+          
+          msg.reply serviceStatusResponse
+        else
+          msg.reply "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
 
 
 getStartDate = (numDays) ->
