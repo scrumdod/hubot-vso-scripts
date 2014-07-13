@@ -491,12 +491,15 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
       dateToSearchFrom = getStartDate(sinceDays)
       client.getRepositories null, (err,repositories) ->
         return handleVsoError msg, err if err
-
-        # use forEach to have a closure for repo        
-        repositories.forEach (repo) ->
-          client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
-            return handleVsoError msg, err if err
-            callback commits, repo
+        
+        if repositories.length == 0
+          msg.reply "No repos where found."
+        else
+          # use forEach to have a closure for repo        
+          repositories.forEach (repo) ->
+            client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
+              return handleVsoError msg, err if err
+              callback commits, repo
 
 
   #########################################
