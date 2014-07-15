@@ -224,7 +224,7 @@ module.exports = (robot) ->
         refresh: true
         success: vsoCmd
         error: (err, res) ->
-          msg.reply "Your VSO oauth token has expired and there\
+          msg.reply "Your VSO oauth token has expired and there \
             was an error refreshing the token.
             Error: #{util.inspect(err or res.Error)}"
     else
@@ -483,6 +483,14 @@ module.exports = (robot) ->
             return handleVsoError msg, err if err
             callback commits
 
+  #########################################
+  # Unhandled VSO command
+  #########################################
+  robot.catchAll (msg) ->
+    return unless msg.message.text.toLowerCase().indexOf(" vso ") isnt -1
+    msg.send """It seems you want to run a VSO command but I don't know how to react to: #{msg.message.text}.
+      Run 'hubot help vso' to get a list of all VSO commands that I can handle."""
+        
 
 getStartDate = (numDays) ->
   date = new Date()
