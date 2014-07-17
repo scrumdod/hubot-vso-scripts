@@ -357,7 +357,7 @@ module.exports = (robot) ->
   #########################################
   robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-    console.log util.inspect(msg.match)
+
     addField = (wi, wi_refName, val) ->
       workItemField=
         field: 
