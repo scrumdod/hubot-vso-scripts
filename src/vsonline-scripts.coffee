@@ -19,7 +19,7 @@
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
-#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and descriptions specified.  This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
+#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and an optional description specified. This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
 #   hubot vso what have i done today - This will show a list of all tasks and git commits that you have updated today
 #   hubot vso show commits in last <num> day|s - This will show a list of git commits that you have made in the last <num> days
 #   hubot vso show projects - Show the list of team projects
@@ -226,7 +226,7 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
         refresh: true
         success: vsoCmd
         error: (err, res) ->
-          msg.reply "Your VSO oauth token has expired and there\
+          msg.reply "Your VSO oauth token has expired and there \
             was an error refreshing the token.
             Error: #{util.inspect(err or res.Error)}"
     else
@@ -361,9 +361,9 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (.*) (with description)? ([\s\S]*)?/im, (msg) ->
+  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-	
+
     addField = (wi, wi_refName, val) ->
       workItemField=
         field: 
@@ -372,8 +372,8 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
       wi.fields.push workItemField
 
     runVsoCmd msg, cmd: (client) ->
-      title = msg.match[2]
-      description = msg.match[4]
+      title = msg.match[2] || msg.match[4]
+      description = msg.match[3]
       workItem=
         fields : []
 
@@ -521,6 +521,14 @@ Click the link to authenticate and authorize " + robot.name + " to operate on yo
         else
           msg.reply "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
 
+  #########################################
+  # Unhandled VSO command
+  #########################################
+  robot.catchAll (msg) ->
+    return unless msg.message.text.toLowerCase().indexOf(" vso ") isnt -1
+    msg.send """It seems you want to run a VSO command but I don't know how to react to: #{msg.message.text}.
+      Run 'hubot help vso' to get a list of all VSO commands that I can handle."""
+        
 
 getStartDate = (numDays) ->
   date = new Date()
