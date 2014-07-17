@@ -19,7 +19,7 @@
 #   hubot vso set room default <key> = <value> - Sets room setting <key> with value <value>
 #   hubot vso show builds - Will return a list of build definitions, along with their build number.
 #   hubot vso build <build number> - Triggers a build of the build number specified.
-#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and descriptions specified.  This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
+#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Create a Product Backlog|Bug|Feature|Impediment work item with the title and an optional description specified. This will put it in the root areapath and iteration.  For a bug the <description> will go into the repro steps field.
 #   hubot vso what have i done today - This will show a list of all tasks that you have updated today
 #   hubot vso show commits in last <num> day|s - This will show a list of commits that you have made in the last <num> days
 #   hubot vso show projects - Show the list of team projects
@@ -355,9 +355,9 @@ module.exports = (robot) ->
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (.*) (with description)? ([\s\S]*)?/im, (msg) ->
+  robot.respond /vso Create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-	
+    console.log util.inspect(msg.match)
     addField = (wi, wi_refName, val) ->
       workItemField=
         field: 
@@ -366,8 +366,8 @@ module.exports = (robot) ->
       wi.fields.push workItemField
 
     runVsoCmd msg, cmd: (client) ->
-      title = msg.match[2]
-      description = msg.match[4]
+      title = msg.match[2] || msg.match[4]
+      description = msg.match[3]
       workItem=
         fields : []
 
