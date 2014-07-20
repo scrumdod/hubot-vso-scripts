@@ -22,9 +22,6 @@
 #   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
 #   hubot vso today - Shows work items you have touched and code commits you have made today
 #   hubot vso commits [last <number> days] - Shows a list of commits you have made in the last day (or specified number of days)
-#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
-#   hubot vso today - Shows work items you have touched and code commits you have made today
-#   hubot vso commits [last <number> days] - Shows a list of commits you have made in the last day (or specified number of days)
 #   hubot vso projects - Shows a list of projects
 #   hubot vso me - Shows info about your Visual Studio Online profile
 #   hubot vso forget credentials - Removes the access token issued to Hubot when you accepted the authorization request
@@ -41,18 +38,11 @@ request = require 'request'
 #########################################
 # Constants
 #########################################
-VSO_CONFIG_KEYS_WHITE_LIST = {
-  "project":
-    help: "Project not set. Set with hubot vso set room default project = <project name or ID>"
-  "area path":
-    help: "Area path not set. Set with hubot vso set room default area path = <area path>"
-  "repositories":
-    help: "Repositories. Set with hubot vso set room default repositories = <1 or more, comma-separated repository IDs or names>"
-}
-
 VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 
 VSO_STATUS_URL = "http://www.visualstudio.com/support/support-overview-vs"
+
+ID_LIST = "Ids"
 
 #########################################
 # Helper class to manage VSOnline brain 
@@ -115,6 +105,20 @@ class VsoData
 
 
 module.exports = (robot) ->
+  # The definition of team defaults.
+  teamDefaultsList = {
+    "project":
+      help: "Project not set. Set with hubot vso set room default project = <project name or ID>"
+    "area path":
+      help: "Area path not set. Set with hubot vso set room default area path = <area path>"
+    "repositories":
+      help: "Repositories. Set with hubot vso set room default repositories = <1 or more, comma-separated repository IDs or names>"
+      callback : (msg, room, configName, wantedRepositories) -> 
+        setDefaultRepositories msg, configName, wantedRepositories
+      #callback : @setDefaultRepositories
+  }
+
+
   # Required env variables
   account = process.env.HUBOT_VSONLINE_ACCOUNT
   accountCollection = process.env.HUBOT_VSONLINE_COLLECTION_NAME || "DefaultCollection"
@@ -212,7 +216,8 @@ client_id=#{appId}\
     else
       Client.createClient url, collection, username, password
   
-  runVsoCmd = (msg, {url, collection, cmd}) ->
+  runVsoCmd = (msg, {url, collection, cmd}) ->    
+   
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
     
     user = msg.envelope.user
@@ -246,11 +251,44 @@ client_id=#{appId}\
   checkRoomDefault = (msg, key) ->
     val = vsoData.getRoomDefault msg.envelope.room, key
     unless val
-      help = VSO_CONFIG_KEYS_WHITE_LIST[key]?.help or
+      help = teamDefaultsList[key]?.help or
         "Room default '#{key}' not set."
       msg.reply help
       
-    return val    
+    return val
+
+  setRoomDefault = (msg, configName, value) ->    
+    vsoData.addRoomDefault msg.envelope.room, configName, value
+    msg.reply "Room default #{configName} is now set to #{value}"
+  
+  setDefaultRepositories = (msg, configName, wantedRepositories) ->
+  
+    runVsoCmd msg, cmd: (client) ->
+
+      client.getRepositories null, (err,repositories) ->
+        return handleVsoError msg, err if err
+      
+        if repositories.length == 0
+          msg.reply "No Git repositories found. No default is being set"
+        else
+          wantedRepositoriesList = wantedRepositories.split ","
+          filteredRepoList = []
+          filteredRepoNameList = []
+          
+          for repo in repositories
+            if wantedRepositoriesList.indexOf(repo.id) != -1 or wantedRepositoriesList.indexOf(repo.name) != -1
+              filteredRepoList.push { 
+                "id" : repo.id 
+                "name" : repo.name
+              }
+              filteredRepoNameList.push repo.name
+        
+          if filteredRepoList.length == 0
+            msg.reply "No Git repositories found with the names or ids specified.\nNo default value changed"
+          else            
+            vsoData.addRoomDefault msg.envelope.room, configName + ID_LIST, filteredRepoList
+            setRoomDefault msg, configName, filteredRepoNameList.join ","
+            
 
   #########################################
   # OAuth call back endpoint
@@ -315,13 +353,19 @@ client_id=#{appId}\
   robot.respond /vso room defaults/i, (msg)->
     defaults = vsoData.roomDefaults msg.envelope.room
     reply = "Defaults for this room:\n"
-    reply += "#{key} is #{defaults?[key] or '{not set}'} \n" for key of VSO_CONFIG_KEYS_WHITE_LIST
+    reply += "#{key} is #{defaults?[key] or '{not set}'} \n" for key of teamDefaultsList
     msg.reply reply
     
   robot.respond /vso room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
-    return msg.reply "This is not a known room setting: #{msg.match[1]}" unless msg.match[1] of VSO_CONFIG_KEYS_WHITE_LIST
-    vsoData.addRoomDefault(msg.envelope.room, msg.match[1], msg.match[2])
-    msg.reply "Room default #{msg.match[1]} is now set to #{msg.match[2]}"
+    configName = msg.match[1]
+    value = msg.match[2]    
+ 
+    return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList  
+    
+    if teamDefaultsList[configName]?.callback
+      teamDefaultsList[configName].callback msg.envelope.room, configName, value
+    else 
+      setRoomDefault msg, configName, value
     
   robot.respond /vso projects/i, (msg) ->
     runVsoCmd msg, cmd: (client) ->
@@ -421,7 +465,10 @@ client_id=#{appId}\
     
   robot.respond /vso today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
+    return unless checkRoomDefault msg, "repositories"
   
+    repositories = checkRoomDefault msg, "repositories" + ID_LIST
+
     runVsoCmd msg, cmd: (client) ->
     
       #TODO - we need to change to get the user profile from VSO
@@ -432,46 +479,50 @@ client_id=#{appId}\
         from WorkItems where [System.ChangedBy] = @me \
         and [System.ChangedDate] = @today"
               
-      getCommitsForUser 1, msg, (pushes, repo) ->
+      getCommitsForUser repositories, 1, msg, (pushes, repo) ->
         numPushes = Object.keys(pushes).length
         mypushes=[]
         if numPushes > 0
-          mypushes.push "Here are your commits in repo " + repo.name + ":" 
+          mypushes.push "Here are your commits in Git repository " + repo.name + ":" 
           for push in pushes
             mypushes.push formatGitCommit(push)
           msg.reply mypushes.join "\n"
         else
-          msg.reply "No code commits found for you today."
+          msg.reply "No code commits found for you today on Git repository " + repo.name
                
-      tasks=[]
+      workItems = []
       client.getWorkItemIds wiql, project, (err, ids) ->
         return handleVsoError msg, err if err
-        numTasks = Object.keys(ids).length
-        if numTasks >0
+        
+        numWorkItems = Object.keys(ids).length
+        if numWorkItems > 0
           workItemIds=[]
           workItemIds.push id for id in ids
          
           client.getWorkItemsById workItemIds, null, null, null, (err, items) ->
             return handleVsoError msg, err if err
             if items and items.length > 0
-              tasks.push "Here are the work items you have touched today:"        
+              workItems.push "Here are the work items you have touched today on project " + project + ":"        
            
-              for task in items
-                for item in task.fields				
+              for workItem in items              
+                for item in workItem.fields				
                   if item.field.refName == "System.Title"
                     title = item.value
                   
                   if item.field.refName == "System.WorkItemType"
                     witType = item.value
 					              
-                tasks.push witType + " #" + task.id + ": " + title if title? and witType?
+                workItems.push witType + " #" + workItem.id + ": " + title if title? and witType?
               			  
-              msg.reply tasks.join "\n"
+              msg.reply workItems.join "\n"
         else
-          msg.reply "You have not touched any work items today."
+          msg.reply "You have not touched any work items on project " + project + " today."
       
-  robot.respond /vso commits (last (\d+))?/i, (msg) ->
-    getCommitsForUser (if msg.match.length > 2 then msg.match[2] else 1), msg, (pushes, repo) ->
+  robot.respond /vso commits *(last (\d+))?/i, (msg) ->
+    return unless checkRoomDefault msg, "repositories"
+    repositories = checkRoomDefault msg, "repositories" + ID_LIST  
+    
+    getCommitsForUser repositories, (if msg.match.length > 2 and msg.match[2] then msg.match[2] else 1), msg, (pushes, repo) ->
 
       numPushes = Object.keys(pushes).length
       mypushes=[]
@@ -481,7 +532,7 @@ client_id=#{appId}\
           mypushes.push formatGitCommit(push)
         msg.reply mypushes.join "\n"
       else
-        msg.reply "No code commits found for you today."
+        msg.reply "No code commits found for you today on Git repository " + repo.name
 
 
   formatGitCommit = (push) ->
@@ -492,22 +543,20 @@ client_id=#{appId}\
   
     return comment + " " + push.url
 
-  getCommitsForUser = (sinceDays, msg, callback) ->
+  getCommitsForUser = (repositories, sinceDays, msg, callback) ->
     runVsoCmd msg, cmd: (client) ->
       #TODO - we need to change to get the user profile from VSO
       myuser = msg.message.user.displayName      
       dateToSearchFrom = getStartDate(sinceDays)
-      client.getRepositories null, (err,repositories) ->
-        return handleVsoError msg, err if err
         
-        if repositories.length == 0
-          msg.reply "No Git repositories found."
-        else
-          # use forEach to have a closure for repo        
-          repositories.forEach (repo) ->
-            client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
-              return handleVsoError msg, err if err
-              callback commits, repo
+      if repositories.length == 0
+        msg.reply "No Git repositories found."
+      else
+        # use forEach to have a closure for repo        
+        repositories.forEach (repo) ->
+          client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
+            return handleVsoError msg, err if err
+            callback commits, repo
 
 
   #########################################
