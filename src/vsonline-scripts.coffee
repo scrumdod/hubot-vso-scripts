@@ -5,6 +5,7 @@
 #    "node-uuid": "~1.4.1"
 #    "hubot": "~2.7.5"
 #    "vso-client": "~0.1.7"
+#    "parse-rss":  "~0.1.1"
 #
 # Configuration:
 #   HUBOT_VSONLINE_ACCOUNT - The Visual Studio Online account name (Required)
@@ -33,7 +34,9 @@ Client = require 'vso-client'
 util = require 'util'
 uuid = require 'node-uuid'
 request = require 'request'
+rssParser = require 'parse-rss'
 {TextMessage} = require 'hubot'
+
 
 #########################################
 # Constants
@@ -563,7 +566,7 @@ client_id=#{appId}\
     if impersonate
       return "@me"    
     else
-      return "'" + msg.envelope.user.replace("'","''") + "'")
+      return "'" + msg.envelope.user.replace("'","''") + "'"
       
 
   #########################################
@@ -585,6 +588,39 @@ client_id=#{appId}\
         else
           msg.reply "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
 		  
+
+
+  #########################################
+  # MSDN related commands
+  #########################################
+  robot.respond /vso help (.*)/i, (msg) ->
+    searchText = msg.match[1]
+  
+    url = getRSSSearchUrl searchText
+    
+    robot.logger.debug "searching " + url
+
+    rssParser url, (err,rss) ->
+      if(err) 
+        robot.logger.error "error searching MSDN " + err
+        msg.reply "Failed to get Visual Studio Online help. Error: " + err
+      else if rss.length == 0
+        msg.reply "No results were found."
+      else        
+        searchResults = "Here are your results:\n"
+        for item in rss
+          searchResults += "#{item.title} #{item.link}\n"
+        searchResults += "\nFor full results: " + getSearchUrl searchText      
+      
+        msg.reply searchResults
+
+  getRSSSearchUrl = (searchString) ->
+    return "http://social.msdn.microsoft.com/search/en-US/feed?format=RSS&theme=vscom&refinement=198%2c234&query=#{escape(searchString)}"
+    
+  getSearchUrl = (searchString) ->           
+    return "http://social.msdn.microsoft.com/Search/en-US/vscom?Refinement=198,234&emptyWatermark=true&ac=4&query=#{escape(searchString)}"
+
+
   #########################################
   # Unhandled VSO command
   #########################################
