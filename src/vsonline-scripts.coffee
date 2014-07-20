@@ -476,8 +476,8 @@ client_id=#{appId}\
 
       wiql="\
         select [System.Id], [System.WorkItemType], [System.Title] \
-        from WorkItems where [System.ChangedBy] = @me \
-        and [System.ChangedDate] = @today"
+        from WorkItems where [System.ChangedDate] = @today \
+        and [System.ChangedBy] = " + getWIQLUserIdentityFor msg
               
       getCommitsForUser repositories, 1, msg, (pushes, repo) ->
         numPushes = Object.keys(pushes).length
@@ -558,6 +558,13 @@ client_id=#{appId}\
             return handleVsoError msg, err if err
             callback commits, repo
 
+
+  getWIQLUserIdentityFor = (msg) ->
+    if impersonate
+      return "@me"    
+    else
+      return "'" + msg.envelope.user.replace("'","''") + "'")
+      
 
   #########################################
   # Visual Studio Online Status related commands
