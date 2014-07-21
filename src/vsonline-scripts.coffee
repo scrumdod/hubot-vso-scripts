@@ -27,6 +27,7 @@
 #   hubot vso me - Shows info about your Visual Studio Online profile
 #   hubot vso forget credentials - Removes the access token issued to Hubot when you accepted the authorization request
 #   hubot vso status - Shows status for the Visual Studio Online service
+#   hubot vso help <search text> - Get help from VS related forums about the <search text>
 #
 # Notes:
 
