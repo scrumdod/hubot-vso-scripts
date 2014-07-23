@@ -27,6 +27,7 @@
 #   hubot vso me - Shows info about your Visual Studio Online profile
 #   hubot vso forget credentials - Removes the access token issued to Hubot when you accepted the authorization request
 #   hubot vso status - Shows status for the Visual Studio Online service
+#   hubot vso help <search text> - Get help from VS related forums about the <search text>
 #
 # Notes:
 
@@ -45,25 +46,25 @@ VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 
 VSO_STATUS_URL = "http://www.visualstudio.com/support/support-overview-vs"
 
-ID_LIST = "Ids"
+ID_LIST_SUFFIX = "Ids"
 
 #########################################
-# Helper class to manage VSOnline brain 
+# Helper class to manage VSOnline brain
 # data
 #########################################
 class VsoData
-  
+
   constructor: (robot) ->
-  
+
     ensureVsoData = ()=>
       robot.logger.debug "Ensuring vso data correct structure"
-      @vsoData ||= {}    
+      @vsoData ||= {}
       @vsoData.rooms ||= {}
       @vsoData.authorizations ||= {}
       @vsoData.authorizations.states ||= {}
       @vsoData.authorizations.users ||= {}
-      robot.brain.set 'vsonline', @vsoData 
-  
+      robot.brain.set 'vsonline', @vsoData
+
     # try to read vso data from brain
     @loaded = false
     @vsoData = robot.brain.get 'vsonline'
@@ -78,31 +79,31 @@ class VsoData
         ensureVsoData()
     else
       ensureVsoData()
-                
+
   roomDefaults: (room) ->
     @vsoData.rooms[room] ||= {}
-    
+
   getRoomDefault: (room, key) ->
     @vsoData.rooms[room]?[key]
-  
+
   addRoomDefault: (room, key, value) ->
     @roomDefaults(room)[key] = value
-  
+
   getOAuthTokenForUser: (userId) ->
     @vsoData.authorizations.users[userId]
-    
+
   addOAuthTokenForUser: (userId, token) ->
     @vsoData.authorizations.users[userId] = token
-  
+
   removeOAuthTokenForUser: (userId) ->
     delete @vsoData.authorizations.users[userId]
-    
+
   addOAuthState: (state, stateData) ->
     @vsoData.authorizations.states[state] = stateData
-  
+
   getOAuthState: (state) ->
     @vsoData.authorizations.states[state]
-    
+
   removeOAuthState: (state) ->
     delete @vsoData.authorizations.states[state]
 
@@ -116,9 +117,8 @@ module.exports = (robot) ->
       help: "Area path not set. Set with hubot vso set room default area path = <area path>"
     "repositories":
       help: "Repositories. Set with hubot vso set room default repositories = <1 or more, comma-separated repository IDs or names>"
-      callback : (msg, room, configName, wantedRepositories) -> 
+      callback : (msg, room, configName, wantedRepositories) ->
         setDefaultRepositories msg, configName, wantedRepositories
-      #callback : @setDefaultRepositories
   }
 
 
@@ -128,29 +128,29 @@ module.exports = (robot) ->
 
   # Optional env variables to allow override a different environment
   environmentDomain = process.env.HUBOT_VSONLINE_ENV_DOMAIN || "visualstudio.com"
-  
+
   # Required env variables to run in trusted mode
   username = process.env.HUBOT_VSONLINE_USERNAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
-    
+
   # Required env variables to run with OAuth (impersonate mode)
   appId = process.env.HUBOT_VSONLINE_APP_ID
   appSecret = process.env.HUBOT_VSONLINE_APP_SECRET
   oauthCallbackUrl = process.env.HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_URL
-  
+
   # OAuth optional env variables
   spsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
   authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "preview_api_all preview_msdn_licensing"
-  
+
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
   robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
-  
+
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
     accessTokenUrl = "#{spsBaseUrl}/oauth2/token"
     authorizeUrl = "#{spsBaseUrl}/oauth2/authorize"
-  
+
   vsoData = new VsoData(robot)
 
   robot.on 'error', (err, msg) ->
@@ -161,17 +161,17 @@ module.exports = (robot) ->
   #########################################
   needsVsoAuthorization = (msg) ->
     return false unless impersonate
-    
+
     userToken = vsoData.getOAuthTokenForUser(msg.envelope.user.id)
     return not userToken
-    
+
   buildVsoAuthorizationUrl = (state)->
     "#{authorizeUrl}?\
 client_id=#{appId}\
 &response_type=Assertion&state=#{state}\
 &scope=#{escape(authorizedScopes)}\
 &redirect_uri=#{escape(oauthCallbackUrl)}"
-      
+
   askForVsoAuthorization = (msg) ->
     state = uuid.v1().toString()
     vsoData.addOAuthState state,
@@ -179,12 +179,12 @@ client_id=#{appId}\
       envelope: msg.envelope
     vsoAuthorizeUrl = buildVsoAuthorizationUrl state
     return msg.reply "You must authorize Hubot to interact with Visual Studio Online on your behalf: #{vsoAuthorizeUrl}"
-      
+
   getVsoOAuthAccessToken = ({user, assertion, refresh, success, error}) ->
     tokenOperation = if refresh then Client.refreshToken else Client.getToken
-    
+
     tokenOperationCallback =  (err, res) ->
-      unless err or res.Error? 
+      unless err or res.Error?
         token = res
         expires_at = new Date
         expires_at.setTime(
@@ -196,15 +196,32 @@ client_id=#{appId}\
       else
         robot.logger.error "Error getting VSO oauth token: #{util.inspect(err or res.Error)}"
         error(err, res) if typeof error is "function"
-    
+
     tokenOperation appSecret, assertion, oauthCallbackUrl, tokenOperationCallback, accessTokenUrl
-        
-        
+
   accessTokenExpired = (user) ->
     token = vsoData.getOAuthTokenForUser(user.id)
     expiresAt = new Date token.expires_at
     now = new Date
-    return (expiresAt - now) < VSO_TOKEN_CLOSE_TO_EXPIRATION_MS        
+    return (expiresAt - now) < VSO_TOKEN_CLOSE_TO_EXPIRATION_MS
+
+
+  #########################################
+  # work items helper functions
+  #########################################
+  getField = (workItem, wi_refName) ->
+    for item in workItem.fields
+      if item.field.refName == wi_refName
+        return item.value
+    return null
+
+  addField = (wi, wi_refName, val) ->
+    workItemField=
+      field:
+        refName : wi_refName
+      value : val
+    wi.fields.push workItemField
+
 
   #########################################
   # VSOnline helper functions
@@ -212,29 +229,29 @@ client_id=#{appId}\
   createVsoClient = ({url, collection, user}) ->
     url ||= accountBaseUrl
     collection ||= accountCollection
-    
+
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
       Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl }
     else
       Client.createClient url, collection, username, password
-  
-  runVsoCmd = (msg, {url, collection, cmd}) ->    
-   
+
+  runVsoCmd = (msg, {url, collection, cmd}) ->
+
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
-    
+
     user = msg.envelope.user
-    
+
     vsoCmd = () ->
       url ||= accountBaseUrl
       collection ||= accountCollection
       client = createVsoClient url: url, collection: collection, user: user
       cmd(client)
-    
+
     if impersonate and accessTokenExpired(user)
       robot.logger.info "VSO token expired for user #{user.id}. Let's refresh"
       token = vsoData.getOAuthTokenForUser(user.id)
-      getVsoOAuthAccessToken 
+      getVsoOAuthAccessToken
         user: user
         assertion: token.refresh_token
         refresh: true
@@ -244,10 +261,10 @@ client_id=#{appId}\
 
     else
       vsoCmd()
-      
+
   handleVsoError = (msg, err) ->
     msg.reply "Unable to execute command: #{util.inspect(err)}" if err
-    
+
   #########################################
   # Room defaults helper functions
   #########################################
@@ -257,47 +274,47 @@ client_id=#{appId}\
       help = teamDefaultsList[key]?.help or
         "Room default '#{key}' not set."
       msg.reply help
-      
+
     return val
 
-  setRoomDefault = (msg, configName, value) ->    
+  setRoomDefault = (msg, configName, value) ->
     vsoData.addRoomDefault msg.envelope.room, configName, value
     msg.reply "Room default #{configName} is now set to #{value}"
-  
+
   setDefaultRepositories = (msg, configName, wantedRepositories) ->
-  
+
     runVsoCmd msg, cmd: (client) ->
 
       client.getRepositories null, (err,repositories) ->
         return handleVsoError msg, err if err
-      
+
         if repositories.length == 0
           msg.reply "No Git repositories found. No default is being set"
         else
           wantedRepositoriesList = wantedRepositories.split ","
           filteredRepoList = []
           filteredRepoNameList = []
-          
+
           for repo in repositories
             if wantedRepositoriesList.indexOf(repo.id) != -1 or wantedRepositoriesList.indexOf(repo.name) != -1
-              filteredRepoList.push { 
-                "id" : repo.id 
+              filteredRepoList.push {
+                "id" : repo.id
                 "name" : repo.name
               }
               filteredRepoNameList.push repo.name
-        
+
           if filteredRepoList.length == 0
             msg.reply "No Git repositories found with the names or ids specified.\nNo default value changed"
-          else            
-            vsoData.addRoomDefault msg.envelope.room, configName + ID_LIST, filteredRepoList
+          else
+            vsoData.addRoomDefault msg.envelope.room, configName + ID_LIST_SUFFIX, filteredRepoList
             setRoomDefault msg, configName, filteredRepoNameList.join ","
-            
+
 
   #########################################
   # OAuth call back endpoint
   #########################################
   if impersonate then robot.router.get oauthCallbackPath, (req, res) ->
-    
+
     # check state argument
     state = req?.query?.state
     return res.send(400, "Invalid state") unless state and stateData = vsoData.getOAuthState(state)
@@ -310,14 +327,14 @@ client_id=#{appId}\
       user: stateData.envelope.user,
       assertion: code,
       refresh: false,
-      success: -> 
+      success: ->
         res.send """
           <html>
             <body>
             <p>Great! You've authorized Hubot to perform tasks on your behalf.
             <p>You can now close this window.</p>
             </body>
-          </html>"""            
+          </html>"""
         vsoData.removeOAuthState state
         robot.receive new TextMessage stateData.envelope.user, stateData.envelope.message.text
       error: (err, resVso) ->
@@ -329,7 +346,7 @@ client_id=#{appId}\
             <p>Error returned from VSO: #{util.inspect(err or resVso.Error)}</p>
             </body>
           </html>"""
-          
+
   #########################################
   # Profile related commands
   #########################################
@@ -341,12 +358,12 @@ client_id=#{appId}\
       client.getCurrentProfile (err, res) ->
         return handleVsoError msg, err if err
         msg.reply "Your name is #{res.displayName} \
-          and your email is #{res.emailAddress}"           
+          and your email is #{res.emailAddress}"
 
   robot.respond /vso forget credentials/i, (msg) ->
     unless impersonate
       return msg.reply "Hubot is not running in impersonation mode."
-    
+
     vsoData.removeOAuthTokenForUser msg.envelope.user.id
     msg.reply "Hubot has removed your credentials and is no longer able to act on your behalf."
 
@@ -358,18 +375,18 @@ client_id=#{appId}\
     reply = "Defaults for this room:\n"
     reply += "#{key} is #{defaults?[key] or '{not set}'} \n" for key of teamDefaultsList
     msg.reply reply
-    
+
   robot.respond /vso room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
     configName = msg.match[1]
-    value = msg.match[2]    
- 
-    return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList  
-    
+    value = msg.match[2]
+
+    return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
+
     if teamDefaultsList[configName]?.callback
       teamDefaultsList[configName].callback msg.envelope.room, configName, value
-    else 
+    else
       setRoomDefault msg, configName, value
-    
+
   robot.respond /vso projects/i, (msg) ->
     runVsoCmd msg, cmd: (client) ->
       client.getProjects (err, projects) ->
@@ -386,13 +403,13 @@ client_id=#{appId}\
       definitions=[]
       client.getBuildDefinitions (err, buildDefinitions) ->
         return handleVsoError msg, err if err
-        
+
         if buildDefinitions.length == 0
-          msg.reply "No build definitions have been configured (or are visible to you)" 
-        else        
+          msg.reply "No build definitions have been configured (or are visible to you)"
+        else
           definitions.push "Build definitions in account #{account}:"
           for build in buildDefinitions
-            definitions.push "{build.name} (#{build.id})"    
+            definitions.push "{build.name} (#{build.id})"
           msg.reply definitions.join "\n"
 
   robot.respond /vso build (.*)/i, (msg) ->
@@ -411,15 +428,42 @@ client_id=#{appId}\
   #########################################
   # WIT related commands
   #########################################
+  robot.respond /vso assign (\d+) to (.*)/i, (msg) ->
+    id = msg.match[1]
+    assignTo = msg.match[2].trim()
+
+    runVsoCmd msg, cmd: (client) ->
+      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
+        return handleVsoError msg, err if err
+
+        return msg.reply "Couldn't find work item " + id if items.length == 0
+
+        workItem = items[0]
+
+        revision = getField workItem, "System.Rev"
+        currentAssignedTo = getField workItem, "System.AssignedTo"
+
+        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
+          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
+        else
+          patchJson =
+            id : id,
+            rev : revision,
+            fields : []
+
+          addField patchJson, "System.AssignedTo", assignTo
+
+          runVsoCmd msg, cmd: (client) ->
+            client.updateWorkItem id, patchJson, (err, result) ->
+              return handleVsoError msg, err if err
+
+              if result.exception
+                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
+              else
+                msg.reply "##{id} assigned to #{assignTo}"
+
   robot.respond /vso create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-
-    addField = (wi, wi_refName, val) ->
-      workItemField=
-        field: 
-          refName : wi_refName
-        value : val
-      wi.fields.push workItemField
 
     runVsoCmd msg, cmd: (client) ->
       title = msg.match[2] || msg.match[4]
@@ -428,12 +472,12 @@ client_id=#{appId}\
         fields : []
 
       description = description.replace(/\n/g,"<br/>") if description
-						
-      addField workItem, "System.Title", title          
+
+      addField workItem, "System.Title", title
       addField workItem, "System.AreaPath", project
-      addField workItem, "System.IterationPath", project      
-		
-      switch msg.match[1]      
+      addField workItem, "System.IterationPath", project
+
+      switch msg.match[1]
         when "pbi"
           addField workItem, "System.WorkItemType", "Product Backlog Item"
           addField workItem, "System.State", "New"
@@ -459,21 +503,21 @@ client_id=#{appId}\
         when "bug"
           addField workItem, "System.WorkItemType", "Bug"
           addField workItem, "System.State", "New"
-          addField workItem, "System.Reason", "New Defect Reported"     
-          addField workItem, "Microsoft.VSTS.TCM.ReproSteps", description	  
-		  
-      client.createWorkItem workItem, (err, createdWorkItem) ->        
+          addField workItem, "System.Reason", "New Defect Reported"
+          addField workItem, "Microsoft.VSTS.TCM.ReproSteps", description
+
+      client.createWorkItem workItem, (err, createdWorkItem) ->
         return handleVsoError msg, err if err
-        msg.reply "Work item #" + createdWorkItem.id + " created: " + createdWorkItem.webUrl		     
-    
+        msg.reply "Work item #" + createdWorkItem.id + " created: " + createdWorkItem.webUrl
+
   robot.respond /vso today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
     return unless checkRoomDefault msg, "repositories"
-  
-    repositories = checkRoomDefault msg, "repositories" + ID_LIST
+
+    repositories = checkRoomDefault msg, "repositories" + ID_LIST_SUFFIX
 
     runVsoCmd msg, cmd: (client) ->
-    
+
       #TODO - we need to change to get the user profile from VSO
       myuser = msg.message.user.displayName
 
@@ -481,50 +525,50 @@ client_id=#{appId}\
         select [System.Id], [System.WorkItemType], [System.Title] \
         from WorkItems where [System.ChangedDate] = @today \
         and [System.ChangedBy] = " + getWIQLUserIdentityFor msg
-              
+
       getCommitsForUser repositories, 1, msg, (pushes, repo) ->
         numPushes = Object.keys(pushes).length
         mypushes=[]
         if numPushes > 0
-          mypushes.push "Here are your commits in Git repository " + repo.name + ":" 
+          mypushes.push "Here are your commits in Git repository " + repo.name + ":"
           for push in pushes
             mypushes.push formatGitCommit(push)
           msg.reply mypushes.join "\n"
         else
           msg.reply "No code commits found for you today on Git repository " + repo.name
-               
+
       workItems = []
       client.getWorkItemIds wiql, project, (err, ids) ->
         return handleVsoError msg, err if err
-        
+
         numWorkItems = Object.keys(ids).length
         if numWorkItems > 0
           workItemIds=[]
           workItemIds.push id for id in ids
-         
+
           client.getWorkItemsById workItemIds, null, null, null, (err, items) ->
             return handleVsoError msg, err if err
             if items and items.length > 0
-              workItems.push "Here are the work items you have touched today on project " + project + ":"        
-           
-              for workItem in items              
-                for item in workItem.fields				
+              workItems.push "Here are the work items you have touched today on project " + project + ":"
+
+              for workItem in items
+                for item in workItem.fields
                   if item.field.refName == "System.Title"
                     title = item.value
-                  
+
                   if item.field.refName == "System.WorkItemType"
                     witType = item.value
-					              
+
                 workItems.push witType + " #" + workItem.id + ": " + title if title? and witType?
-              			  
+
               msg.reply workItems.join "\n"
         else
           msg.reply "You have not touched any work items on project " + project + " today."
-      
+
   robot.respond /vso commits *(last (\d+))?/i, (msg) ->
     return unless checkRoomDefault msg, "repositories"
-    repositories = checkRoomDefault msg, "repositories" + ID_LIST  
-    
+    repositories = checkRoomDefault msg, "repositories" + ID_LIST_SUFFIX
+
     getCommitsForUser repositories, (if msg.match.length > 2 and msg.match[2] then msg.match[2] else 1), msg, (pushes, repo) ->
 
       numPushes = Object.keys(pushes).length
@@ -543,31 +587,31 @@ client_id=#{appId}\
       comment = push.comment.substring(0,77) + "..."
     else
       comment = push.comment
-  
+
     return comment + " " + push.url
 
   getCommitsForUser = (repositories, sinceDays, msg, callback) ->
     runVsoCmd msg, cmd: (client) ->
       #TODO - we need to change to get the user profile from VSO
-      myuser = msg.message.user.displayName      
+      myuser = msg.message.user.displayName
       dateToSearchFrom = getStartDate(sinceDays)
-        
+
       if repositories.length == 0
         msg.reply "No Git repositories found."
       else
-        # use forEach to have a closure for repo        
+        # use forEach to have a closure for repo
         repositories.forEach (repo) ->
-          client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) -> 
+          client.getCommits repo.id, null, myuser, null, dateToSearchFrom, (err,commits) ->
             return handleVsoError msg, err if err
             callback commits, repo
 
 
   getWIQLUserIdentityFor = (msg) ->
     if impersonate
-      return "@me"    
+      return "@me"
     else
       return "'" + msg.envelope.user.replace("'","''") + "'"
-      
+
 
   #########################################
   # Visual Studio Online Status related commands
@@ -576,18 +620,18 @@ client_id=#{appId}\
     request "https://www.windowsazurestatus.com/odata/ServiceCurrentIncidents?api-version=1.0&$filter=startswith(Name,'#{escape("Visual Studio")}')" , (err, response, body) -> 
       if(err)
         robot.logger.error "Error getting status: #{util.inspect(err)}"
-        msg.reply "Unable to get the current status of Visual Studio Online. Visit #{VSO_STATUS_URL}" 
+        msg.reply "Unable to get the current status of Visual Studio Online. Visit #{VSO_STATUS_URL}"
       else
         if response.statusCode == 200
-          status = JSON.parse body      
-          serviceStatusResponse = "Here is the current status of Visual Studio Online:\n" 
+          status = JSON.parse body
+          serviceStatusResponse = "Here is the current status of Visual Studio Online:\n"
           for vsoService in status.value
-           serviceStatusResponse += vsoService.Name + " (" + vsoService.Status + ")\n"  
+           serviceStatusResponse += vsoService.Name + " (" + vsoService.Status + ")\n"
           serviceStatusResponse += "Full details: #{VSO_STATUS_URL}"
           msg.reply serviceStatusResponse
         else
           msg.reply "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
-		  
+
 
 
   #########################################
@@ -595,29 +639,29 @@ client_id=#{appId}\
   #########################################
   robot.respond /vso help (.*)/i, (msg) ->
     searchText = msg.match[1]
-  
+
     url = getRSSSearchUrl searchText
-    
+
     robot.logger.debug "searching " + url
 
     rssParser url, (err,rss) ->
-      if(err) 
+      if(err)
         robot.logger.error "error searching MSDN " + err
         msg.reply "Failed to get Visual Studio Online help. Error: " + err
       else if rss.length == 0
         msg.reply "No results were found."
-      else        
+      else
         searchResults = "Here are your results:\n"
         for item in rss
           searchResults += "#{item.title} #{item.link}\n"
-        searchResults += "\nFor full results: " + getSearchUrl searchText      
-      
+        searchResults += "\nFor full results: " + getSearchUrl searchText
+
         msg.reply searchResults
 
   getRSSSearchUrl = (searchString) ->
     return "http://social.msdn.microsoft.com/search/en-US/feed?format=RSS&theme=vscom&refinement=198%2c234&query=#{escape(searchString)}"
-    
-  getSearchUrl = (searchString) ->           
+
+  getSearchUrl = (searchString) ->
     return "http://social.msdn.microsoft.com/Search/en-US/vscom?Refinement=198,234&emptyWatermark=true&ac=4&query=#{escape(searchString)}"
 
 
