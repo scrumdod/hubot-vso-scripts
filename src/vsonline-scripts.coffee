@@ -610,7 +610,7 @@ client_id=#{appId}\
     if impersonate
       return "@me"
     else
-      return "'" + msg.envelope.user.replace("'","''") + "'"
+      return "'" + msg.envelope.user.displayName.replace("'","''") + "'"
 
 
   #########################################
