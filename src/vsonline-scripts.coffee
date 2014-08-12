@@ -47,6 +47,7 @@ VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 VSO_STATUS_URL = "http://www.visualstudio.com/support/support-overview-vs"
 
 ID_LIST_SUFFIX = "Ids"
+DEFAULT_API_VERSION = "1.0-preview.1"
 
 #########################################
 # Helper class to manage VSOnline brain
@@ -226,18 +227,18 @@ client_id=#{appId}\
   #########################################
   # VSOnline helper functions
   #########################################
-  createVsoClient = ({url, collection, user}) ->
+  createVsoClient = ({url, collection, user, apiVersion}) ->
     url ||= accountBaseUrl
     collection ||= accountCollection
+    apiVersion || = DEFAULT_API_VERSION
 
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
-      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl }
+      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl , apiVersion : apiVersion }
     else
-      Client.createClient url, collection, username, password
+      Client.createClient url, collection, username, password, {apiVersion : apiVersion}
 
-  runVsoCmd = (msg, {url, collection, cmd}) ->
-
+  runVsoCmd = (msg, {url, collection, cmd, apiVersion}) ->
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
 
     user = msg.envelope.user
@@ -245,7 +246,7 @@ client_id=#{appId}\
     vsoCmd = () ->
       url ||= accountBaseUrl
       collection ||= accountCollection
-      client = createVsoClient url: url, collection: collection, user: user
+      client = createVsoClient url: url, collection: collection, user: user, apiVersion: apiVersion
       cmd(client)
 
     if impersonate and accessTokenExpired(user)
