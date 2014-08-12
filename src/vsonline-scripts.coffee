@@ -112,11 +112,11 @@ module.exports = (robot) ->
   # The definition of team defaults.
   teamDefaultsList = {
     "project":
-      help: "Project not set. Set with hubot vso set room default project = <project name or ID>"
+      help: "Project not set. Set with hubot vso room default project = <project name or ID>"
     "area path":
-      help: "Area path not set. Set with hubot vso set room default area path = <area path>"
+      help: "Area path not set. Set with hubot vso room default area path = <area path>"
     "repositories":
-      help: "Repositories. Set with hubot vso set room default repositories = <1 or more, comma-separated repository IDs or names>"
+      help: "Repositories. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
       callback : (msg, room, configName, wantedRepositories) ->
         setDefaultRepositories msg, configName, wantedRepositories
   }
