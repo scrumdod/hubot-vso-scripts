@@ -21,6 +21,7 @@
 #   hubot vso builds - Shows a list of build definitions
 #   hubot vso build <build definition number> - Triggers a build
 #   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
+#   hubot vso assign <work item list> to <user name> - Assigns one more or more work item(s) to a user (comma separated ids)
 #   hubot vso today - Shows work items you have touched and code commits you have made today
 #   hubot vso commits [last <number> days] - Shows a list of commits you have made in the last day (or specified number of days)
 #   hubot vso projects - Shows a list of projects
@@ -429,39 +430,12 @@ client_id=#{appId}\
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso assign (\d+) to (.*)/i, (msg) ->
-    id = msg.match[1]
-    assignTo = msg.match[2].trim()
+  robot.respond /vso assign (\d+(,\d+)*) to (.*)/i, (msg) ->
+    idsList = msg.match[1]
+    assignTo = msg.match[3].trim()
 
-    runVsoCmd msg, cmd: (client) ->
-      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
-        return handleVsoError msg, err if err
-
-        return msg.reply "Couldn't find work item " + id if items.length == 0
-
-        workItem = items[0]
-
-        revision = getField workItem, "System.Rev"
-        currentAssignedTo = getField workItem, "System.AssignedTo"
-
-        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
-          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
-        else
-          patchJson =
-            id : id,
-            rev : revision,
-            fields : []
-
-          addField patchJson, "System.AssignedTo", assignTo
-
-          runVsoCmd msg, cmd: (client) ->
-            client.updateWorkItem id, patchJson, (err, result) ->
-              return handleVsoError msg, err if err
-
-              if result.exception
-                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
-              else
-                msg.reply "##{id} assigned to #{assignTo}"
+    for id in idsList.split ","
+      assignWorkItemToUser msg, id,assignTo
 
   robot.respond /vso create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -612,6 +586,37 @@ client_id=#{appId}\
       return "@me"
     else
       return "'" + msg.envelope.user.displayName.replace("'","''") + "'"
+
+  assignWorkItemToUser = (msg, id, assignTo) ->
+    runVsoCmd msg, cmd: (client) ->
+      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
+        return handleVsoError msg, err if err
+
+        return msg.reply "Couldn't find work item " + id if items.length == 0
+
+        workItem = items[0]
+
+        revision = getField workItem, "System.Rev"
+        currentAssignedTo = getField workItem, "System.AssignedTo"
+
+        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
+          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
+        else
+          patchJson =
+            id : id,
+            rev : revision,
+            fields : []
+
+          addField patchJson, "System.AssignedTo", assignTo
+
+          runVsoCmd msg, cmd: (client) ->
+            client.updateWorkItem id, patchJson, (err, result) ->
+              return handleVsoError msg, err if err
+
+              if result.exception
+                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
+              else
+                msg.reply "##{id} assigned to #{assignTo}"
 
 
   #########################################
