@@ -118,8 +118,8 @@ module.exports = (robot) ->
     "area path":
       help: "Area path not set. Set with hubot vso room default area path = <area path>"
     "repositories":
-      help: "Repositories. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
-      callback : (msg, room, configName, wantedRepositories) ->
+      help: "Repositories not set. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
+      callback : (msg, configName, wantedRepositories) ->
         setDefaultRepositories msg, configName, wantedRepositories
   }
 
@@ -385,7 +385,7 @@ client_id=#{appId}\
     return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
 
     if teamDefaultsList[configName]?.callback
-      teamDefaultsList[configName].callback msg.envelope.room, configName, value
+      teamDefaultsList[configName].callback msg, configName, value
     else
       setRoomDefault msg, configName, value
 
