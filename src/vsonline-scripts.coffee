@@ -21,6 +21,7 @@
 #   hubot vso builds - Shows a list of build definitions
 #   hubot vso build <build definition number> - Triggers a build
 #   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
+#   hubot vso assign <work item list> to <user name> - Assigns one more or more work item(s) to a user (comma separated ids)
 #   hubot vso today - Shows work items you have touched and code commits you have made today
 #   hubot vso commits [last <number> days] - Shows a list of commits you have made in the last day (or specified number of days)
 #   hubot vso projects - Shows a list of projects
@@ -47,6 +48,7 @@ VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 VSO_STATUS_URL = "http://www.visualstudio.com/support/support-overview-vs"
 
 ID_LIST_SUFFIX = "Ids"
+DEFAULT_API_VERSION = "1.0-preview.1"
 
 #########################################
 # Helper class to manage VSOnline brain
@@ -116,8 +118,8 @@ module.exports = (robot) ->
     "area path":
       help: "Area path not set. Set with hubot vso room default area path = <area path>"
     "repositories":
-      help: "Repositories. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
-      callback : (msg, room, configName, wantedRepositories) ->
+      help: "Repositories not set. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
+      callback : (msg, configName, wantedRepositories) ->
         setDefaultRepositories msg, configName, wantedRepositories
   }
 
@@ -226,18 +228,18 @@ client_id=#{appId}\
   #########################################
   # VSOnline helper functions
   #########################################
-  createVsoClient = ({url, collection, user}) ->
+  createVsoClient = ({url, collection, user, apiVersion}) ->
     url ||= accountBaseUrl
     collection ||= accountCollection
+    apiVersion || = DEFAULT_API_VERSION
 
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
-      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl }
+      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl , apiVersion : apiVersion }
     else
-      Client.createClient url, collection, username, password
+      Client.createClient url, collection, username, password, {apiVersion : apiVersion}
 
-  runVsoCmd = (msg, {url, collection, cmd}) ->
-
+  runVsoCmd = (msg, {url, collection, cmd, apiVersion}) ->
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
 
     user = msg.envelope.user
@@ -245,7 +247,7 @@ client_id=#{appId}\
     vsoCmd = () ->
       url ||= accountBaseUrl
       collection ||= accountCollection
-      client = createVsoClient url: url, collection: collection, user: user
+      client = createVsoClient url: url, collection: collection, user: user, apiVersion: apiVersion
       cmd(client)
 
     if impersonate and accessTokenExpired(user)
@@ -383,7 +385,7 @@ client_id=#{appId}\
     return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
 
     if teamDefaultsList[configName]?.callback
-      teamDefaultsList[configName].callback msg.envelope.room, configName, value
+      teamDefaultsList[configName].callback msg, configName, value
     else
       setRoomDefault msg, configName, value
 
@@ -428,39 +430,12 @@ client_id=#{appId}\
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso assign (\d+) to (.*)/i, (msg) ->
-    id = msg.match[1]
-    assignTo = msg.match[2].trim()
+  robot.respond /vso assign (\d+(,\d+)*) to (.*)/i, (msg) ->
+    idsList = msg.match[1]
+    assignTo = msg.match[3].trim()
 
-    runVsoCmd msg, cmd: (client) ->
-      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
-        return handleVsoError msg, err if err
-
-        return msg.reply "Couldn't find work item " + id if items.length == 0
-
-        workItem = items[0]
-
-        revision = getField workItem, "System.Rev"
-        currentAssignedTo = getField workItem, "System.AssignedTo"
-
-        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
-          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
-        else
-          patchJson =
-            id : id,
-            rev : revision,
-            fields : []
-
-          addField patchJson, "System.AssignedTo", assignTo
-
-          runVsoCmd msg, cmd: (client) ->
-            client.updateWorkItem id, patchJson, (err, result) ->
-              return handleVsoError msg, err if err
-
-              if result.exception
-                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
-              else
-                msg.reply "##{id} assigned to #{assignTo}"
+    for id in idsList.split ","
+      assignWorkItemToUser msg, id,assignTo
 
   robot.respond /vso create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -610,7 +585,38 @@ client_id=#{appId}\
     if impersonate
       return "@me"
     else
-      return "'" + msg.envelope.user.replace("'","''") + "'"
+      return "'" + msg.envelope.user.displayName.replace("'","''") + "'"
+
+  assignWorkItemToUser = (msg, id, assignTo) ->
+    runVsoCmd msg, cmd: (client) ->
+      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
+        return handleVsoError msg, err if err
+
+        return msg.reply "Couldn't find work item " + id if items.length == 0
+
+        workItem = items[0]
+
+        revision = getField workItem, "System.Rev"
+        currentAssignedTo = getField workItem, "System.AssignedTo"
+
+        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
+          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
+        else
+          patchJson =
+            id : id,
+            rev : revision,
+            fields : []
+
+          addField patchJson, "System.AssignedTo", assignTo
+
+          runVsoCmd msg, cmd: (client) ->
+            client.updateWorkItem id, patchJson, (err, result) ->
+              return handleVsoError msg, err if err
+
+              if result.exception
+                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
+              else
+                msg.reply "##{id} assigned to #{assignTo}"
 
 
   #########################################
