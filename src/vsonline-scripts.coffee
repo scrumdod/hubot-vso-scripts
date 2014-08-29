@@ -754,10 +754,13 @@ client_id=#{appId}\
       else if rss.length == 0
         msg.reply "No results were found."
       else
-        searchResults = "Here are your results:\n"
-        for item in rss
-          searchResults += "#{item.title} #{item.link}\n"
-        searchResults += "\nFor full results: " + getSearchUrl searchText
+        if rss.length > 5 then rss = rss[0...5] 		 
+        searchResults = "Here are the top search results for '" + msg.match[1] + "':\n\n"
+        index = 1
+        for item in rss		
+          searchResults += "#{index}. #{item.title} [#{item.link}]\n"
+          index++
+        searchResults += "\nFor the full results: " + getSearchUrl searchText
 
         msg.reply searchResults
 
