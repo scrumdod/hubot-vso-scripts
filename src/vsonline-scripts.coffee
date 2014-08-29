@@ -20,9 +20,11 @@
 #   hubot vso room default <key> = <value> - Sets a room default project, etc.
 #   hubot vso builds - Shows a list of build definitions
 #   hubot vso build <build definition number> - Triggers a build
-#   hubot vso create pbi|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
-#   hubot vso today - Shows work items you have touched and code commits you have made today
-#   hubot vso commits [last <number> days] - Shows a list of commits you have made in the last day (or specified number of days)
+#   hubot vso create pbi|requirement|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
+#   hubot vso assign <work item list> to <user name> - Assigns one more or more work item(s) to a user (comma separated ids)
+#   hubot vso today - Shows work items you have touched and code commits/checkins you have made today
+#   hubot vso commits [last <number> days] - Shows a list of Git commits you have made in the last day (or specified number of days)
+#   hubot vso checkins [last <number> days] - Shows a list of TFVC checkins you have made in the last day (or specified number of days)
 #   hubot vso projects - Shows a list of projects
 #   hubot vso me - Shows info about your Visual Studio Online profile
 #   hubot vso forget credentials - Removes the access token issued to Hubot when you accepted the authorization request
@@ -46,7 +48,13 @@ VSO_TOKEN_CLOSE_TO_EXPIRATION_MS = 120*1000
 
 VSO_STATUS_URL = "http://www.visualstudio.com/support/support-overview-vs"
 
-ID_LIST_SUFFIX = "Ids"
+REPOSITORIESIDKEY = "Ids"
+PROJECTCAPABILITIESKEY = "Capabilities"
+
+MAX_COMMENT_SIZE = 77
+
+DEFAULT_API_VERSION = "1.0-preview.1"
+WORKITEM_API_VERSION = "1.0-preview.2"
 
 #########################################
 # Helper class to manage VSOnline brain
@@ -80,14 +88,17 @@ class VsoData
     else
       ensureVsoData()
 
+  getInternalKey: (key, metadataKey) ->
+    return key + (metadataKey || "")
+
   roomDefaults: (room) ->
     @vsoData.rooms[room] ||= {}
 
-  getRoomDefault: (room, key) ->
-    @vsoData.rooms[room]?[key]
+  getRoomDefault: (room, key, metadataKey) ->
+    @vsoData.rooms[room]?[@getInternalKey key, metadataKey]
 
-  addRoomDefault: (room, key, value) ->
-    @roomDefaults(room)[key] = value
+  addRoomDefault: (room, key, metadataKey, value) ->
+    @roomDefaults(room)[@getInternalKey key, metadataKey] = value
 
   getOAuthTokenForUser: (userId) ->
     @vsoData.authorizations.users[userId]
@@ -112,12 +123,15 @@ module.exports = (robot) ->
   # The definition of team defaults.
   teamDefaultsList = {
     "project":
-      help: "Project not set. Set with hubot vso set room default project = <project name or ID>"
+      help: "Project not set. Set with hubot vso room default project = <project name or ID>"
+      callback : (msg, configName, wantedProjectName) ->
+        setDefaultProject msg, configName, wantedProjectName
+
     "area path":
-      help: "Area path not set. Set with hubot vso set room default area path = <area path>"
+      help: "Area path not set. Set with hubot vso room default area path = <area path>"
     "repositories":
-      help: "Repositories. Set with hubot vso set room default repositories = <1 or more, comma-separated repository IDs or names>"
-      callback : (msg, room, configName, wantedRepositories) ->
+      help: "Repositories not set. Set with hubot vso room default repositories = <1 or more, comma-separated repository IDs or names>"
+      callback : (msg, configName, wantedRepositories) ->
         setDefaultRepositories msg, configName, wantedRepositories
   }
 
@@ -210,34 +224,31 @@ client_id=#{appId}\
   # work items helper functions
   #########################################
   getField = (workItem, wi_refName) ->
-    for item in workItem.fields
-      if item.field.refName == wi_refName
-        return item.value
+    return workItem.fields[wi_refName] if workItem.fields[wi_refName]
     return null
 
-  addField = (wi, wi_refName, val) ->
-    workItemField=
-      field:
-        refName : wi_refName
+  addFieldChange = (operations, wi_refName, val, operation = "add") ->
+    operation =
+      path : "/fields/#{wi_refName}"
+      op : operation
       value : val
-    wi.fields.push workItemField
-
+    operations.push operation
 
   #########################################
   # VSOnline helper functions
   #########################################
-  createVsoClient = ({url, collection, user}) ->
+  createVsoClient = ({url, collection, user, apiVersion}) ->
     url ||= accountBaseUrl
     collection ||= accountCollection
+    apiVersion || = DEFAULT_API_VERSION
 
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
-      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl }
+      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl , apiVersion : apiVersion }
     else
-      Client.createClient url, collection, username, password
+      Client.createClient url, collection, username, password, {apiVersion : apiVersion}
 
-  runVsoCmd = (msg, {url, collection, cmd}) ->
-
+  runVsoCmd = (msg, {url, collection, cmd, apiVersion}) ->
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
 
     user = msg.envelope.user
@@ -245,7 +256,7 @@ client_id=#{appId}\
     vsoCmd = () ->
       url ||= accountBaseUrl
       collection ||= accountCollection
-      client = createVsoClient url: url, collection: collection, user: user
+      client = createVsoClient url: url, collection: collection, user: user, apiVersion: apiVersion
       cmd(client)
 
     if impersonate and accessTokenExpired(user)
@@ -268,18 +279,41 @@ client_id=#{appId}\
   #########################################
   # Room defaults helper functions
   #########################################
-  checkRoomDefault = (msg, key) ->
-    val = vsoData.getRoomDefault msg.envelope.room, key
+
+  # Gets the room default value and sends the user a message 
+  # if the value is not set.
+  # The metadataKey is optional. If the metatada has been requested
+  # and there is no value set, the user will be asked to reenter the
+  # room default key again.
+  # We don't use a single object for the room default to be backward compatible
+  checkRoomDefault = (msg, key, metadataKey) ->
+    val = vsoData.getRoomDefault msg.envelope.room, key, metadataKey
     unless val
       help = teamDefaultsList[key]?.help or
         "Room default '#{key}' not set."
+      if metadataKey
+        help = "I am sorry but you have old information for this room default value. You wll have to set it up again\n#{help}"
+
       msg.reply help
 
     return val
 
-  setRoomDefault = (msg, configName, value) ->
-    vsoData.addRoomDefault msg.envelope.room, configName, value
+  setRoomDefault = (msg, configName, value, metadataKey) ->
+    vsoData.addRoomDefault msg.envelope.room, configName, metadataKey, value
     msg.reply "Room default #{configName} is now set to #{value}"
+
+
+  setDefaultProject = (msg, configName, wantedTeamProject) ->
+    runVsoCmd msg, cmd: (client) ->
+      client.getProject wantedTeamProject, true, (err,projectInfo) ->
+        return handleVsoError msg, err if err
+
+        if projectInfo.state != 'WellFormed'
+          return msg.reply "Invalid project. Current State #{projectInfo.state}"
+
+        vsoData.addRoomDefault msg.envelope.room, configName, PROJECTCAPABILITIESKEY, projectInfo.capabilities
+        setRoomDefault msg, configName, wantedTeamProject
+
 
   setDefaultRepositories = (msg, configName, wantedRepositories) ->
 
@@ -306,7 +340,7 @@ client_id=#{appId}\
           if filteredRepoList.length == 0
             msg.reply "No Git repositories found with the names or ids specified.\nNo default value changed"
           else
-            vsoData.addRoomDefault msg.envelope.room, configName + ID_LIST_SUFFIX, filteredRepoList
+            vsoData.addRoomDefault msg.envelope.room, configName, REPOSITORIESIDKEY, filteredRepoList
             setRoomDefault msg, configName, filteredRepoNameList.join ","
 
 
@@ -383,7 +417,7 @@ client_id=#{appId}\
     return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
 
     if teamDefaultsList[configName]?.callback
-      teamDefaultsList[configName].callback msg.envelope.room, configName, value
+      teamDefaultsList[configName].callback msg, configName, value
     else
       setRoomDefault msg, configName, value
 
@@ -428,93 +462,58 @@ client_id=#{appId}\
   #########################################
   # WIT related commands
   #########################################
-  robot.respond /vso assign (\d+) to (.*)/i, (msg) ->
-    id = msg.match[1]
-    assignTo = msg.match[2].trim()
+  robot.respond /vso assign (\d+(,\d+)*) to (.*)/i, (msg) ->
+    idsList = msg.match[1]
+    assignTo = msg.match[3].trim()
 
-    runVsoCmd msg, cmd: (client) ->
-      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
-        return handleVsoError msg, err if err
+    for id in idsList.split ","
+      assignWorkItemToUser msg, id,assignTo
 
-        return msg.reply "Couldn't find work item " + id if items.length == 0
-
-        workItem = items[0]
-
-        revision = getField workItem, "System.Rev"
-        currentAssignedTo = getField workItem, "System.AssignedTo"
-
-        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
-          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
-        else
-          patchJson =
-            id : id,
-            rev : revision,
-            fields : []
-
-          addField patchJson, "System.AssignedTo", assignTo
-
-          runVsoCmd msg, cmd: (client) ->
-            client.updateWorkItem id, patchJson, (err, result) ->
-              return handleVsoError msg, err if err
-
-              if result.exception
-                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.exception.Message}"
-              else
-                msg.reply "##{id} assigned to #{assignTo}"
-
-  robot.respond /vso create (PBI|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
+  robot.respond /vso create (PBI|Requirement|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
+    return unless projectCapabilities = checkRoomDefault msg, "project", PROJECTCAPABILITIESKEY
 
-    runVsoCmd msg, cmd: (client) ->
-      title = msg.match[2] || msg.match[4]
-      description = msg.match[3]
-      workItem=
-        fields : []
+    title = msg.match[2] || msg.match[4]
+    description = msg.match[3] || ""
+    operations = []
+    workItemType = ""
 
-      description = description.replace(/\n/g,"<br/>") if description
+    description = description.replace(/\n/g,"<br/>") if description
 
-      addField workItem, "System.Title", title
-      addField workItem, "System.AreaPath", project
-      addField workItem, "System.IterationPath", project
+    addFieldChange operations, "System.Title", title
 
-      switch msg.match[1]
-        when "pbi"
-          addField workItem, "System.WorkItemType", "Product Backlog Item"
-          addField workItem, "System.State", "New"
-          addField workItem, "System.Reason", "New Backlog Item"
-          addField workItem, "System.Description", description
-        when "task"
-          addField workItem, "System.WorkItemType", "Task"
-          addField workItem, "System.State", "To Do"
-          addField workItem, "System.Reason", "New Task"
-          addField workItem, "System.Description", description
-        when "feature"
-          addField workItem, "System.WorkItemType", "Feature"
-          addField workItem, "System.State", "New"
-          addField workItem, "System.Reason", "New Feature"
-          addField workItem, "Microsoft.VSTS.Common.Priority","2"
-          addField workItem, "System.Description", description
-        when "impediment"
-          addField workItem, "System.WorkItemType", "Impediment"
-          addField workItem, "System.State", "Open"
-          addField workItem, "System.Reason", "New Impediment"
-          addField workItem, "Microsoft.VSTS.Common.Priority","2"
-          addField workItem, "System.Description", description
-        when "bug"
-          addField workItem, "System.WorkItemType", "Bug"
-          addField workItem, "System.State", "New"
-          addField workItem, "System.Reason", "New Defect Reported"
-          addField workItem, "Microsoft.VSTS.TCM.ReproSteps", description
+    switch msg.match[1].toLowerCase()
+      when "pbi"
+        workItemType =  "Product Backlog Item"
+        addFieldChange operations, "System.Description", description
+      when "requirement"
+        workItemType =  "Requirement"
+        addFieldChange operations, "System.Description", description
+      when "task"
+        workItemType =  "Task"
+        addFieldChange operations, "System.Description", description
+      when "feature"
+        workItemType =  "Feature"
+        addFieldChange operations, "System.Description", description
+      when "impediment"
+        workItemType =  "Impediment"
+        addFieldChange operations, "System.Description", description
+      when "bug"
+        workItemType =  "Bug"
+        addFieldChange operations, "Microsoft.VSTS.TCM.ReproSteps", description
 
-      client.createWorkItem workItem, (err, createdWorkItem) ->
+    runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+      client.createWorkItem  operations, project, workItemType, (err, createdWorkItem) ->
         return handleVsoError msg, err if err
-        msg.reply "Work item #" + createdWorkItem.id + " created: " + createdWorkItem.webUrl
+        msg.reply "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem.html
 
   robot.respond /vso today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
-    return unless checkRoomDefault msg, "repositories"
+    return unless projectCapabilities = checkRoomDefault msg, "project", PROJECTCAPABILITIESKEY
 
-    repositories = checkRoomDefault msg, "repositories" + ID_LIST_SUFFIX
+    if projectCapabilities.versioncontrol.sourceControlType == 'Git'
+      projectHasGitRepo = true
+      return unless repositories = checkRoomDefault msg, "repositories", REPOSITORIESIDKEY
 
     runVsoCmd msg, cmd: (client) ->
 
@@ -526,16 +525,29 @@ client_id=#{appId}\
         from WorkItems where [System.ChangedDate] = @today \
         and [System.ChangedBy] = " + getWIQLUserIdentityFor msg
 
-      getCommitsForUser repositories, 1, msg, (pushes, repo) ->
-        numPushes = Object.keys(pushes).length
-        mypushes=[]
-        if numPushes > 0
-          mypushes.push "Here are your commits in Git repository " + repo.name + ":"
-          for push in pushes
-            mypushes.push formatGitCommit(push)
-          msg.reply mypushes.join "\n"
-        else
-          msg.reply "No code commits found for you today on Git repository " + repo.name
+      if projectHasGitRepo?
+        getCommitsForUser repositories, 1, msg, (pushes, repo) ->
+          numPushes = Object.keys(pushes).length
+          mypushes = []
+          if numPushes > 0
+            mypushes.push "Here are your commits in Git repository " + repo.name + ":"
+            for push in pushes
+              mypushes.push formatGitCommit(push)
+            msg.reply mypushes.join "\n"
+          else
+            msg.reply "No code commits found for you today on Git repository " + repo.name
+      else
+        itemPath = "$/#{project}"
+        getCheckinsForUser itemPath, 1, msg, (checkins) ->
+          if checkins.length == 0
+            msg.reply "No code checkins found for you today on #{itemPath}"
+          else
+            mycheckins = []
+            mycheckins.push "Here are your checkins in #{project} team project :"
+            for checkin in checkins
+              mycheckins.push formatTfvcCommit(checkin)
+
+            msg.reply mycheckins.join "\n"
 
       workItems = []
       client.getWorkItemIds wiql, project, (err, ids) ->
@@ -567,7 +579,7 @@ client_id=#{appId}\
 
   robot.respond /vso commits *(last (\d+))?/i, (msg) ->
     return unless checkRoomDefault msg, "repositories"
-    repositories = checkRoomDefault msg, "repositories" + ID_LIST_SUFFIX
+    repositories = checkRoomDefault msg, "repositories", REPOSITORIESIDKEY
 
     getCommitsForUser repositories, (if msg.match.length > 2 and msg.match[2] then msg.match[2] else 1), msg, (pushes, repo) ->
 
@@ -581,14 +593,41 @@ client_id=#{appId}\
       else
         msg.reply "No code commits found for you today on Git repository " + repo.name
 
+  robot.respond /vso checkins *(last (\d+))?/i, (msg) ->
+    return unless project = checkRoomDefault msg, "project"
+    return unless projectCapabilities = checkRoomDefault msg, "project", PROJECTCAPABILITIESKEY
 
-  formatGitCommit = (push) ->
-    if push.comment.length > 77
-      comment = push.comment.substring(0,77) + "..."
+    return msg.reply "#{project} team project is not using Team Foundation version control" if projectCapabilities.versioncontrol.sourceControlType != 'Tfvc'
+
+    itemPath = "$/#{project}"
+    lastDays = if msg.match.length > 2 and msg.match[2] then msg.match[2] else 1
+
+    getCheckinsForUser itemPath, lastDays, msg, (checkins) ->
+      if checkins.length == 0
+        msg.reply "No code checkins found for you in #{itemPath} for the last #{lastDays} day(s)."
+      else
+        mycheckins = []
+        mycheckins.push "Here are your checkins in #{project} team project for the last #{lastDays} day(s):"
+        for checkin in checkins
+          mycheckins.push formatTfvcCommit(checkin)
+
+        msg.reply mycheckins.join "\n"
+
+  formatGitCommit = (checkin) ->
+    if push.comment.length > MAX_COMMENT_SIZE
+      checkin = push.checkin.substring(0,MAX_COMMENT_SIZE) + "..."
     else
-      comment = push.comment
+      comment = push.checkin
 
-    return comment + " " + push.url
+    return comment + " " + checkin.url
+
+  formatTfvcCommit = (checkin) ->
+    if checkin.comment?.length > MAX_COMMENT_SIZE
+      comment = checkin.comment.substring(0,MAX_COMMENT_SIZE) + "..."
+    else
+      comment = checkin.comment || ""
+
+    return "#{checkin.changesetId} - #{comment}"
 
   getCommitsForUser = (repositories, sinceDays, msg, callback) ->
     runVsoCmd msg, cmd: (client) ->
@@ -605,12 +644,49 @@ client_id=#{appId}\
             return handleVsoError msg, err if err
             callback commits, repo
 
+  getCheckinsForUser = (itemPath, sinceDays, msg, callback) ->
+
+    runVsoCmd msg, cmd: (client) ->
+
+      myuser = msg.message.user.displayName
+      dateToSearchFrom = getStartDate(sinceDays)
+
+      client.getChangeSets { itemPath : itemPath, fromDate : dateToSearchFrom, author : myuser, maxCommentLength : MAX_COMMENT_SIZE + 1}, (err,checkins) ->
+        return handleVsoError msg, err if err
+        callback checkins
 
   getWIQLUserIdentityFor = (msg) ->
     if impersonate
       return "@me"
     else
-      return "'" + msg.envelope.user.replace("'","''") + "'"
+      return "'" + msg.envelope.user.displayName.replace("'","''") + "'"
+
+  assignWorkItemToUser = (msg, id, assignTo) ->
+    runVsoCmd msg, apiVersion : WORKITEM_API_VERSION, cmd: (client) ->
+      client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
+
+        return handleVsoError msg, err if err
+        return msg.reply "Couldn't find work item " + id if items.length == 0
+
+        workItem = items[0]
+
+        currentAssignedTo = getField workItem, "System.AssignedTo"
+
+        if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
+          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
+        else
+          operations = []
+
+          addFieldChange operations, "System.AssignedTo", assignTo
+
+          runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+            client.updateWorkItem id, operations, (err, result) ->
+              return handleVsoError msg, err if err
+
+              if result.message
+                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.message}"
+              else
+                msg.reply "Work item ##{id} assigned to #{assignTo} #{result.html}"
 
 
   #########################################
