@@ -21,7 +21,8 @@
 #   hubot vso builds - Shows a list of build definitions
 #   hubot vso build <build definition number> - Triggers a build
 #   hubot vso create pbi|requirement|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
-#   hubot vso assign <work item list> to <user name> - Assigns one more or more work item(s) to a user (comma separated ids)
+#   hubot vso assign <work item list> to @me | <user name> - Assigns one more or more work item(s) to you (needs impersonate mode) or a user name
+#   hubot vso update work remaining <work item id> to <hours remaining> - Updates work remaining on a work item
 #   hubot vso today - Shows work items you have touched and code commits/checkins you have made today
 #   hubot vso commits [last <number> days] - Shows a list of Git commits you have made in the last day (or specified number of days)
 #   hubot vso checkins [last <number> days] - Shows a list of TFVC checkins you have made in the last day (or specified number of days)
@@ -55,6 +56,7 @@ MAX_COMMENT_SIZE = 77
 
 DEFAULT_API_VERSION = "1.0-preview.1"
 WORKITEM_API_VERSION = "1.0-preview.2"
+PROFILE_API_VERSION= "1.0-preview"
 
 #########################################
 # Helper class to manage VSOnline brain
@@ -388,7 +390,7 @@ client_id=#{appId}\
     unless impersonate
       return msg.reply "Hubot is not running in impersonation mode."
 
-    runVsoCmd msg, cmd: (client) ->
+    runVsoCmd msg, apiVersion: PROFILE_API_VERSION, cmd: (client) ->
       client.getCurrentProfile (err, res) ->
         return handleVsoError msg, err if err
         msg.reply "Your name is #{res.displayName} \
@@ -466,39 +468,61 @@ client_id=#{appId}\
     idsList = msg.match[1]
     assignTo = msg.match[3].trim()
 
+    if assignTo.toLowerCase() == "@me"
+      unless impersonate
+        return msg.reply "Hubot is not running in impersonation mode."
+    assignTo = msg.envelope.user.displayName
+
     for id in idsList.split ","
       assignWorkItemToUser msg, id,assignTo
+
+  robot.respond /vso update work remaining (\d+) to (\d+)/i, (msg) ->
+    id=msg.match[1]
+    workRemaining = msg.match[2]
+
+    operations = []
+
+    addFieldChange operations, "Microsoft.VSTS.Scheduling.RemainingWork", workRemaining
+
+    runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+      client.updateWorkItem id, operations, (err, result) ->
+        return handleVsoError msg, err if err
+        if result.message
+          msg.reply "Failed to update remaining work for ##{id} to #{workRemaining}.  \nError: #{result.message}"
+        else
+          msg.reply "Work item ##{id} remaining work updated to #{workRemaining} #{result.html}"
+
 
   robot.respond /vso create (PBI|Requirement|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
     return unless projectCapabilities = checkRoomDefault msg, "project", PROJECTCAPABILITIESKEY
 
-      title = msg.match[2] || msg.match[4]
+    title = msg.match[2] || msg.match[4]
     description = msg.match[3] || ""
     operations = []
     workItemType = ""
 
-      description = description.replace(/\n/g,"<br/>") if description
+    description = description.replace(/\n/g,"<br/>") if description
 
     addFieldChange operations, "System.Title", title
 
     switch msg.match[1].toLowerCase()
-        when "pbi"
+      when "pbi"
         workItemType =  "Product Backlog Item"
         addFieldChange operations, "System.Description", description
       when "requirement"
         workItemType =  "Requirement"
         addFieldChange operations, "System.Description", description
-        when "task"
+      when "task"
         workItemType =  "Task"
         addFieldChange operations, "System.Description", description
-        when "feature"
+      when "feature"
         workItemType =  "Feature"
         addFieldChange operations, "System.Description", description
-        when "impediment"
+      when "impediment"
         workItemType =  "Impediment"
         addFieldChange operations, "System.Description", description
-        when "bug"
+      when "bug"
         workItemType =  "Bug"
         addFieldChange operations, "Microsoft.VSTS.TCM.ReproSteps", description
 
@@ -526,16 +550,16 @@ client_id=#{appId}\
         and [System.ChangedBy] = " + getWIQLUserIdentityFor msg
 
       if projectHasGitRepo?
-      getCommitsForUser repositories, 1, msg, (pushes, repo) ->
-        numPushes = Object.keys(pushes).length
+        getCommitsForUser repositories, 1, msg, (pushes, repo) ->
+          numPushes = Object.keys(pushes).length
           mypushes = []
-        if numPushes > 0
-          mypushes.push "Here are your commits in Git repository " + repo.name + ":"
-          for push in pushes
-            mypushes.push formatGitCommit(push)
-          msg.reply mypushes.join "\n"
-        else
-          msg.reply "No code commits found for you today on Git repository " + repo.name
+          if numPushes > 0
+            mypushes.push "Here are your commits in Git repository " + repo.name + ":"
+            for push in pushes
+              mypushes.push formatGitCommit(push, repo)
+            msg.reply mypushes.join "\n"
+          else
+            msg.reply "No code commits found for you today on Git repository " + repo.name
       else
         itemPath = "$/#{project}"
         getCheckinsForUser itemPath, 1, msg, (checkins) ->
@@ -586,12 +610,13 @@ client_id=#{appId}\
       numPushes = Object.keys(pushes).length
       mypushes=[]
       if numPushes > 0
-        mypushes.push "Here are your commits in rep " + repo.name + ":"
+        mypushes.push "Here are your commits in repo " + repo.name + ":"
         for push in pushes
-          mypushes.push formatGitCommit(push)
+          console.log push
+          mypushes.push formatGitCommit(push, repo)
         msg.reply mypushes.join "\n"
       else
-        msg.reply "No code commits found for you today on Git repository " + repo.name
+        msg.reply "No code commits found for you on Git repository " + repo.name
 
   robot.respond /vso checkins *(last (\d+))?/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -613,13 +638,15 @@ client_id=#{appId}\
 
         msg.reply mycheckins.join "\n"
 
-  formatGitCommit = (checkin) ->
-    if push.comment.length > MAX_COMMENT_SIZE
-      checkin = push.checkin.substring(0,MAX_COMMENT_SIZE) + "..."
+  formatGitCommit = (checkin, repo) ->
+    if checkin.comment.length > MAX_COMMENT_SIZE
+      comment = checkin.comment.substring(0,MAX_COMMENT_SIZE) + "..."
     else
-      comment = push.checkin
+      comment = checkin.comment
 
-    return comment + " " + checkin.url
+    webUrl = accountBaseUrl + "/" + accountCollection + "/_git/" + repo.name + "/commit/" + checkin.commitId
+
+    return comment + " " + webUrl
 
   formatTfvcCommit = (checkin) ->
     if checkin.comment?.length > MAX_COMMENT_SIZE
@@ -693,7 +720,7 @@ client_id=#{appId}\
   # Visual Studio Online Status related commands
   #########################################
   robot.respond /vso status/i, (msg) ->
-    request "https://www.windowsazurestatus.com/odata/ServiceCurrentIncidents?api-version=1.0&$filter=startswith(Name,'#{escape("Visual Studio")}')" , (err, response, body) -> 
+    request "https://www.windowsazurestatus.com/odata/ServiceCurrentIncidents?api-version=1.0&$filter=startswith(Name,'#{escape("Visual Studio")}')" , (err, response, body) ->
       if(err)
         robot.logger.error "Error getting status: #{util.inspect(err)}"
         msg.reply "Unable to get the current status of Visual Studio Online. Visit #{VSO_STATUS_URL}"
