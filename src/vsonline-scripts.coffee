@@ -527,7 +527,7 @@ client_id=#{appId}\
     runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
       client.createWorkItem  operations, project, workItemType, (err, createdWorkItem) ->
         return handleVsoError msg, err if err
-        msg.reply "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem.html
+        msg.reply "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem._links.html.href
 
   robot.respond /vso today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -752,10 +752,10 @@ client_id=#{appId}\
       else if rss.length == 0
         msg.reply "No results were found."
       else
-        if rss.length > 5 then rss = rss[0...5] 		 
+        if rss.length > 5 then rss = rss[0...5]
         searchResults = "Here are the top search results for '" + msg.match[1] + "':\n\n"
         index = 1
-        for item in rss		
+        for item in rss
           searchResults += "#{index}. #{item.title} [#{item.link}]\n"
           index++
         searchResults += "\nFor the full results: " + getSearchUrl searchText
