@@ -21,7 +21,7 @@
 #   hubot vso builds - Shows a list of build definitions
 #   hubot vso build <build definition number> - Triggers a build
 #   hubot vso create pbi|requirement|bug|feature|impediment|task <title> with description <description> - Creates a work item, and optionally sets a description (repro step for some work item types)
-#   hubot vso assign <work item list> to @me | <user name> - Assigns one more or more work item(s) to you (needs impersonate mode) or a user name
+#   hubot vso assign <work item list> to @me | <user name> - Assigns one more or more work item(s) to you (@me) or a user name specified
 #   hubot vso update work remaining <work item id> to <hours remaining> - Updates work remaining on a work item
 #   hubot vso today - Shows work items you have touched and code commits/checkins you have made today
 #   hubot vso commits [last <number> days] - Shows a list of Git commits you have made in the last day (or specified number of days)
@@ -469,9 +469,7 @@ client_id=#{appId}\
     assignTo = msg.match[3].trim()
 
     if assignTo.toLowerCase() == "@me"
-      unless impersonate
-        return msg.reply "Hubot is not running in impersonation mode."
-    assignTo = msg.envelope.user.displayName
+      assignTo = msg.envelope.user.displayName
 
     for id in idsList.split ","
       assignWorkItemToUser msg, id,assignTo
