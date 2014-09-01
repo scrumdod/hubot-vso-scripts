@@ -20,14 +20,14 @@ The scripts can run in two modes
 To install, in your Hubot instance directory
 
 ```
-npm install vsonline-scripts
+npm install hubot-vso-scripts
 ```
 
 
 Include the package in your hubot's external-scripts.json
 
 ```
-["vsonline-scripts"]
+["hubot-vso-scripts"]
 ```
 
 ### Configuration
