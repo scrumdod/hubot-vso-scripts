@@ -711,7 +711,7 @@ client_id=#{appId}\
               if result.message
                 msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.message}"
               else
-                msg.reply "Work item ##{id} assigned to #{assignTo} #{result.html}"
+                msg.reply "Work item ##{id} assigned to #{assignTo} #{result._links.html.href}"
 
 
   #########################################
