@@ -488,7 +488,7 @@ client_id=#{appId}\
         if result.message
           msg.reply "Failed to update remaining work for ##{id} to #{workRemaining}.  \nError: #{result.message}"
         else
-          msg.reply "Work item ##{id} remaining work updated to #{workRemaining} #{result.html}"
+          msg.reply "Work item ##{id} remaining work updated to #{workRemaining} #{result._links.html.href}"
 
 
   robot.respond /vso create (PBI|Requirement|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
@@ -711,7 +711,7 @@ client_id=#{appId}\
               if result.message
                 msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.message}"
               else
-                msg.reply "Work item ##{id} assigned to #{assignTo} #{result.html}"
+                msg.reply "Work item ##{id} assigned to #{assignTo} #{result._links.html.href}"
 
 
   #########################################
