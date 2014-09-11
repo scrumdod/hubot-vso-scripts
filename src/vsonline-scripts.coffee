@@ -40,6 +40,8 @@ uuid = require 'node-uuid'
 request = require 'request'
 rssParser = require 'parse-rss'
 {TextMessage} = require 'hubot'
+https = require('https')
+fs = require('fs')
 
 
 #########################################
@@ -137,6 +139,30 @@ module.exports = (robot) ->
         setDefaultRepositories msg, configName, wantedRepositories
   }
 
+  #########################################
+  # SSL Configuration
+  #########################################
+  configureSSL = () ->
+    robot.logger.debug "Configuring SSL in VSO scripts"
+
+    unless SSLPrivateKeyPath? and SSLCertKeyPath?
+      robot.logger.error "not enough parameters to enable SSL. I need private key and certificate. disabling impersonate mode"
+      impersonate = false
+      return
+
+    sslOptions = {
+      requestCert: SSLRequestCertificate,
+      rejectUnauthorized: SSLRejectUnauthorized,
+      key: fs.readFileSync(SSLPrivateKeyPath),
+      cert: fs.readFileSync(SSLCertKeyPath)
+    }
+
+    if (SSLCACertPath?)
+      sslOptions.ca = ca: fs.readFileSync(SSLCACertPath)
+
+    https.createServer(sslOptions, robot.router).listen(SSLPort)
+
+
 
   # Required env variables
   account = process.env.HUBOT_VSONLINE_ACCOUNT
@@ -149,6 +175,15 @@ module.exports = (robot) ->
   username = process.env.HUBOT_VSONLINE_USERNAME
   password = process.env.HUBOT_VSONLINE_PASSWORD
 
+  ## Variables to support SSL (optional)
+  SSLEnabled        = process.env.HUBOT_VSONLINE_SSL_ENABLE || false
+  SSLPort           = process.env.HUBOT_VSONLINE_SSL_PORT || 443
+  SSLPrivateKeyPath = process.env.HUBOT_VSONLINE_SSL_PRIVATE_KEY_PATH
+  SSLCertKeyPath    = process.env.HUBOT_VSONLINE_SSL_CERT_KEY_PATH
+  SSLRequestCertificate = process.env.HUBOT_VSONLINE_SSL_REQUESTCERT || false
+  SSLRejectUnauthorized = process.env.HUBOT_VSONLINE_SSL_REJECTUNAUTHORIZED || false
+  SSLCACertPath     = process.env.HUBOT_VSONLINE_SSL_CA_KEY_PATH
+
   # Required env variables to run with OAuth (impersonate mode)
   appId = process.env.HUBOT_VSONLINE_APP_ID
   appSecret = process.env.HUBOT_VSONLINE_APP_SECRET
@@ -160,12 +195,14 @@ module.exports = (robot) ->
 
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
+
   robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
 
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
     accessTokenUrl = "#{spsBaseUrl}/oauth2/token"
     authorizeUrl = "#{spsBaseUrl}/oauth2/authorize"
+    configureSSL() if SSLEnabled
 
   vsoData = new VsoData(robot)
 
