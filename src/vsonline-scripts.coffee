@@ -347,7 +347,7 @@ client_id=#{appId}\
       client.getProject wantedTeamProject, true, (err,projectInfo) ->
         return handleVsoError msg, err if err
 
-        if projectInfo.state != 'WellFormed'
+        if projectInfo.state.toLowerCase() != 'wellformed'
           return msg.reply "Invalid project. Current State #{projectInfo.state}"
 
         vsoData.addRoomDefault msg.envelope.room, configName, PROJECTCAPABILITIESKEY, projectInfo.capabilities
