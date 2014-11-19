@@ -210,11 +210,15 @@ module.exports = (robot) ->
   #########################################
   # OAuth helper functions
   #########################################
+  sortScope = (scopes) ->
+    return "" if not scopes
+    return (scopes.split " ").sort().join " "
+
   needsVsoAuthorization = (msg) ->
     return false unless impersonate
 
     userToken = vsoData.getOAuthTokenForUser(msg.envelope.user.id)
-    return not userToken or userToken.scope == authorizedScopes
+    return not userToken or (sortScope(userToken.scope)) != (sortScope(authorizedScopes))
 
   buildVsoAuthorizationUrl = (state)->
     "#{authorizeUrl}?\
