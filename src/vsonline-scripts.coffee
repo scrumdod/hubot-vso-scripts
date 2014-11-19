@@ -4,7 +4,7 @@
 # Dependencies:
 #    "node-uuid": "~1.4.1"
 #    "hubot": "~2.7.5"
-#    "vso-client": "~0.1.7"
+#    "vso-client": "~0.2.0"
 #    "parse-rss":  "~0.1.1"
 #
 # Configuration:
