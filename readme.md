@@ -9,10 +9,10 @@ tasks in Visual Studio Online.
 
 The scripts can run in two modes
 
-+ Trusted mode: the tasks against Visual Studio Online are performed using 
++ Trusted mode: the tasks against Visual Studio Online are performed using
   the same account
-+ Impersonate mode: the tasks against Visual Studio Online are perfomed on 
-  behalf of the user issuing the command. In this mode the user has to explicitly 
++ Impersonate mode: the tasks against Visual Studio Online are perfomed on
+  behalf of the user issuing the command. In this mode the user has to explicitly
   authorize hubot
 
 ### Installation
@@ -29,6 +29,23 @@ Include the package in your hubot's external-scripts.json
 ```
 ["hubot-vso-scripts"]
 ```
+
+### Upgrade from 0.2.5 or previous version
+
+If you are using impersonate mode (OAuth), you will need to re-register your application on Visual Studio Online.
+
+This is needed, because version 1.0 has introduced a more granular scope and we now request
+less permissions
+
+You will need to register the application with the following permissions
+
+ + Work items (read and write)
+ + Build (read and execute)
+ + Code (read)
+
+Then you need to update you environment variables with your app id and your app secret (authorize URL stays the same)
+
+The scripts will automatically detect the situation and ask the users to (re) authorize hubot scripts.
 
 ### Configuration
 
