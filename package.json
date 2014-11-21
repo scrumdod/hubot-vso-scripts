@@ -1,6 +1,6 @@
 {
   "name": "hubot-vso-scripts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Hubot Visual Studio Online Scripts",
   "main": "index.coffee",
   "scripts": {
@@ -24,7 +24,7 @@
   "homepage": "https://github.com/scrumdod/vso-hubotscripts",
   "dependencies": {
     "node-uuid": "~1.4.1",
-    "vso-client": "~0.2.0",
+    "vso-client": "~0.2.1",
     "request": "~2.36.0",
     "parse-rss":  "~0.1.1"
   }

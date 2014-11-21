@@ -53,6 +53,11 @@ The required environment variables are
 
 + **HUBOT\_VSONLINE\_ACCOUNT** - The Visual Studio Online account's name
 
+Message replies are by default sent in plaintext, but if your adapter is capable of receiving messanges in other
+format you can configure the scripts to use a different formatting
+
++ **HUBOT\_VSONLINE\_REPLY\_FORMAT** The formatting of replies. You can use plaintext,html or markdown
+
 *Trust Mode*
 
 In trust mode we need to set the alternate credentials of the user who  will perform the tasks
@@ -63,12 +68,12 @@ In trust mode we need to set the alternate credentials of the user who  will per
 *Impersonate Mode*
 
 In impersonate we need to set the variables defined in the application registered in Visual Studio Online
-(Click [here](http://www.visualstudio.com/integrate/get-started-auth-oauth2-vsi) to know how to register an 
+(Click [here](http://www.visualstudio.com/integrate/get-started-auth-oauth2-vsi) to know how to register an
 application in Visual Studio Online
 
 + **HUBOT\_VSONLINE\_APP\_ID**: The application ID
 + **HUBOT\_VSONLINE\_APP\_SECRET**: The application secret
-+ **HUBOT\_VSONLINE\_AUTHORIZATION\_CALLBACK\_URL**: The OAuth callback URL. This URL must be available from 
++ **HUBOT\_VSONLINE\_AUTHORIZATION\_CALLBACK\_URL**: The OAuth callback URL. This URL must be available from
   the chat service you're using
 
 

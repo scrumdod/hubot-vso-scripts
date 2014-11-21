@@ -138,6 +138,18 @@ module.exports = (robot) ->
   }
 
   #########################################
+  # Parameter Helpers
+  #########################################
+  # checks if a given value is in the set if it is, returns it
+  # otherwise return undefined
+  validateParameterValue = (value, allowedValues, parameterName) ->
+    return value if value in allowedValues
+
+    robot.logger.error "#{value} not in list of allowed values for parameter #{parameterName}"
+
+    undefined
+
+  #########################################
   # SSL Configuration
   #########################################
   configureSSL = () ->
@@ -191,10 +203,13 @@ module.exports = (robot) ->
   spsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
   authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "vso.build_execute vso.work_write vso.code"
 
+  # replies formatting
+  replyFormat = (validateParameterValue process.env.HUBOT_VSONLINE_REPLY_FORMAT, ["plaintext", "html","markdown"], "HUBOT_VSONLINE_REPLY_FORMAT") or "plaintext"
+
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
 
-  robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate}"
+  robot.logger.info "VSOnline scripts running with impersonate set to #{impersonate} and replying with messages in format #{replyFormat}"
 
   if impersonate
     oauthCallbackPath = require('url').parse(oauthCallbackUrl).path
@@ -233,7 +248,7 @@ client_id=#{appId}\
       createdAt: new Date
       envelope: msg.envelope
     vsoAuthorizeUrl = buildVsoAuthorizationUrl state
-    return msg.reply "You must authorize Hubot to interact with Visual Studio Online on your behalf: #{vsoAuthorizeUrl}"
+    return reply msg, "You must authorize Hubot to interact with Visual Studio Online on your behalf: " + formatReplyUrl vsoAuthorizeUrl, "authorize"
 
   getVsoOAuthAccessToken = ({user, assertion, refresh, success, error}) ->
     tokenOperation = if refresh then Client.refreshToken else Client.getToken
@@ -309,13 +324,36 @@ client_id=#{appId}\
         refresh: true
         success: vsoCmd
         error: (err, res) ->
-          msg.reply "Your authorization to Hubot has been revoked or has expired."
+          reply msg, "Your authorization to Hubot has been revoked or has expired."
 
     else
       vsoCmd()
 
   handleVsoError = (msg, err) ->
-    msg.reply "Unable to execute command: #{util.inspect(err)}" if err
+    reply msg, "Unable to execute command: #{escapeIfNecessary util.inspect(err)}" if err
+
+  #########################################
+  # Message reply helper functions
+  #########################################
+  escapeHTML = (s) ->
+    ("" + s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+   escapeIfNecessary = (text) ->
+     return escapeHTML text if replyFormat == "html"
+
+     return text
+
+   formatReplyUrl = (url, text, options = {}) ->
+    return "[#{text}](#{url})" if replyFormat == "markdown"
+    return "<a href='#{url}'>#{escapeHTML text}</a>" if replyFormat == "html"
+    # from this forward only formats that do not support links
+    return "#{text} #{url}" if options.prependText
+    return url
+
+  reply = (msg, text) ->
+    text = text.replace "\n","<br />" if replyFormat == "html"
+
+    msg.reply text
 
   #########################################
   # Room defaults helper functions
@@ -335,13 +373,13 @@ client_id=#{appId}\
       if metadataKey
         help = "I am sorry but you have old information for this room default value. You wll have to set it up again\n#{help}"
 
-      msg.reply help
+      reply msg, help
 
     return val
 
   setRoomDefault = (msg, configName, value, metadataKey) ->
     vsoData.addRoomDefault msg.envelope.room, configName, metadataKey, value
-    msg.reply "Room default #{configName} is now set to #{value}"
+    reply msg, "Room default #{configName} is now set to #{escapeIfNecessary value}"
 
 
   setDefaultProject = (msg, configName, wantedTeamProject) ->
@@ -350,7 +388,7 @@ client_id=#{appId}\
         return handleVsoError msg, err if err
 
         if projectInfo.state.toLowerCase() != 'wellformed'
-          return msg.reply "Invalid project. Current State #{projectInfo.state}"
+          return reply msg, "Invalid project. Current State #{projectInfo.state}"
 
         vsoData.addRoomDefault msg.envelope.room, configName, PROJECTCAPABILITIESKEY, projectInfo.capabilities
         setRoomDefault msg, configName, wantedTeamProject
@@ -364,7 +402,7 @@ client_id=#{appId}\
         return handleVsoError msg, err if err
 
         if repositories.length == 0
-          msg.reply "No Git repositories found. No default is being set"
+          reply msg, "No Git repositories found. No default is being set"
         else
           wantedRepositoriesList = wantedRepositories.split ","
           filteredRepoList = []
@@ -379,7 +417,7 @@ client_id=#{appId}\
               filteredRepoNameList.push repo.name
 
           if filteredRepoList.length == 0
-            msg.reply "No Git repositories found with the names or ids specified.\nNo default value changed"
+            reply msg, "No Git repositories found with the names or ids specified.\nNo default value changed"
           else
             vsoData.addRoomDefault msg.envelope.room, configName, REPOSITORIESIDKEY, filteredRepoList
             setRoomDefault msg, configName, filteredRepoNameList.join ","
@@ -427,20 +465,19 @@ client_id=#{appId}\
   #########################################
   robot.respond /vso me(\?)*/i, (msg) ->
     unless impersonate
-      return msg.reply "Hubot is not running in impersonation mode."
+      return reply msg, "Hubot is not running in impersonation mode."
 
     runVsoCmd msg, cmd: (client) ->
       client.getCurrentProfile (err, res) ->
         return handleVsoError msg, err if err
-        msg.reply "Your name is #{res.displayName} \
-          and your email is #{res.emailAddress}"
+        reply msg, "Your name is #{res.displayName} and your email is #{escapeIfNecessary res.emailAddress}"
 
   robot.respond /vso forget credentials/i, (msg) ->
     unless impersonate
-      return msg.reply "Hubot is not running in impersonation mode."
+      return reply msg, "Hubot is not running in impersonation mode."
 
     vsoData.removeOAuthTokenForUser msg.envelope.user.id
-    msg.reply "Hubot has removed your credentials and is no longer able to act on your behalf."
+    reply msg, "Hubot has removed your credentials and is no longer able to act on your behalf."
 
   #########################################
   # Room defaults related commands
@@ -449,13 +486,13 @@ client_id=#{appId}\
     defaults = vsoData.roomDefaults msg.envelope.room
     reply = "Defaults for this room:\n"
     reply += "#{key} is #{defaults?[key] or '{not set}'} \n" for key of teamDefaultsList
-    msg.reply reply
+    reply msg, reply
 
   robot.respond /vso room default ([\w]+)\s*=\s*(.*)\s*$/i, (msg) ->
     configName = msg.match[1]
     value = msg.match[2]
 
-    return msg.reply "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
+    return reply msg, "This is not a known room setting: #{msg.match[1]}" unless configName of teamDefaultsList
 
     if teamDefaultsList[configName]?.callback
       teamDefaultsList[configName].callback msg, configName, value
@@ -466,9 +503,10 @@ client_id=#{appId}\
     runVsoCmd msg, cmd: (client) ->
       client.getProjects (err, projects) ->
         return handleVsoError msg, err if err
-        reply = "Projects in account #{account}: \n"
-        reply += p.name + "\n" for p in projects
-        msg.reply reply
+        projectsReply = "Projects in account #{account}:\n"
+        projectsReply += (escapeIfNecessary p.name) + "\n" for p in projects
+
+        reply msg, projectsReply
 
   #########################################
   # Build related commands
@@ -481,12 +519,12 @@ client_id=#{appId}\
         return handleVsoError msg, err if err
 
         if buildDefinitions.length == 0
-          msg.reply "No build definitions have been configured (or are visible to you)"
+          reply msg, "No build definitions have been configured (or are visible to you)"
         else
           definitions.push "Build definitions in account #{account}:"
           for build in buildDefinitions
-            definitions.push "{build.name} (#{build.id})"
-          msg.reply definitions.join "\n"
+            definitions.push "{escapeIfNecessary build.name} (#{build.id})"
+          reply msg, definitions.join "\n"
 
   robot.respond /vso build (.*)/i, (msg) ->
     buildId = msg.match[1]
@@ -499,7 +537,7 @@ client_id=#{appId}\
 
       client.queueBuild buildRequest, (err, buildResponse) ->
         return handleVsoError msg, err if err
-        msg.reply "A build has been queued (hope you don't break it): " + buildResponse.url
+        reply msg, "A build has been queued (hope you don't break it): " + buildResponse.url
 
   #########################################
   # WIT related commands
@@ -526,10 +564,9 @@ client_id=#{appId}\
       client.updateWorkItem id, operations, (err, result) ->
         return handleVsoError msg, err if err
         if result.message
-          msg.reply "Failed to update remaining work for ##{id} to #{workRemaining}.  \nError: #{result.message}"
+          reply msg, "Failed to update remaining work for ##{id} to #{workRemaining}.  \nError: #{result.message}"
         else
-          msg.reply "Work item ##{id} remaining work updated to #{workRemaining} #{result._links.html.href}"
-
+          reply msg, "Updated remaining work to #{workRemaining} for work item #{formatReplyUrl result._links.html.href, '#'+id}"
 
   robot.respond /vso create (PBI|Requirement|Task|Feature|Impediment|Bug) (?:(?:(.*) with description($|[\s\S]+)?)|(.*))/im, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -567,7 +604,10 @@ client_id=#{appId}\
     runVsoCmd msg, cmd: (client) ->
       client.createWorkItem  operations, project, workItemType, (err, createdWorkItem) ->
         return handleVsoError msg, err if err
-        msg.reply "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem._links.html.href
+        if replyFormat == "plaintext"
+          reply msg, "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem._links.html.href
+        else
+          reply msg, "Work item #{formatReplyUrl createdWorkItem._links.html.href, '#'+createdWorkItem.id} created on project #{project}"
 
   robot.respond /vso today/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
@@ -595,21 +635,21 @@ client_id=#{appId}\
             mypushes.push "Here are your commits in Git repository " + repo.name + ":"
             for push in pushes
               mypushes.push formatGitCommit(push, repo)
-            msg.reply mypushes.join "\n"
+            reply msg, mypushes.join "\n"
           else
-            msg.reply "No code commits found for you today on Git repository " + repo.name
+            reply msg, "No code commits found for you today on Git repository " + repo.name
       else
         itemPath = "$/#{project}"
         getCheckinsForUser itemPath, 1, msg, (checkins) ->
           if checkins.length == 0
-            msg.reply "No code checkins found for you today on #{itemPath}"
+            reply msg, "No code checkins found for you today on #{escapeIfNecessary itemPath}"
           else
             mycheckins = []
             mycheckins.push "Here are your checkins in #{project} team project :"
             for checkin in checkins
               mycheckins.push formatTfvcCommit(checkin)
 
-            msg.reply mycheckins.join "\n"
+            reply msg, mycheckins.join "\n"
 
       workItems = []
       client.getWorkItemIds wiql, project, (err, ids) ->
@@ -631,9 +671,9 @@ client_id=#{appId}\
 
                 workItems.push witType + " #" + workItem.id + ": " + title if title? and witType?
 
-              msg.reply workItems.join "\n"
+              reply msg, workItems.join "\n"
         else
-          msg.reply "You have not touched any work items on project " + project + " today."
+          reply msg, "You have not touched any work items on project " + project + " today."
 
   robot.respond /vso commits *(last (\d+))?/i, (msg) ->
     return unless checkRoomDefault msg, "repositories"
@@ -648,29 +688,29 @@ client_id=#{appId}\
         for push in pushes
           console.log push
           mypushes.push formatGitCommit(push, repo)
-        msg.reply mypushes.join "\n"
+        reply msg, mypushes.join "\n"
       else
-        msg.reply "No code commits found for you on Git repository " + repo.name
+        reply msg, "No code commits found for you on Git repository " + repo.name
 
   robot.respond /vso checkins *(last (\d+))?/i, (msg) ->
     return unless project = checkRoomDefault msg, "project"
     return unless projectCapabilities = checkRoomDefault msg, "project", PROJECTCAPABILITIESKEY
 
-    return msg.reply "#{project} team project is not using Team Foundation version control" if projectCapabilities.versioncontrol.sourceControlType != 'Tfvc'
+    return reply msg, "#{project} team project is not using Team Foundation version control" if projectCapabilities.versioncontrol.sourceControlType != 'Tfvc'
 
     itemPath = "$/#{project}"
     lastDays = if msg.match.length > 2 and msg.match[2] then msg.match[2] else 1
 
     getCheckinsForUser itemPath, lastDays, msg, (checkins) ->
       if checkins.length == 0
-        msg.reply "No code checkins found for you in #{itemPath} for the last #{lastDays} day(s)."
+        reply msg, "No code checkins found for you in #{escapeIfNecessary itemPath} for the last #{lastDays} day(s)."
       else
         mycheckins = []
         mycheckins.push "Here are your checkins in #{project} team project for the last #{lastDays} day(s):"
         for checkin in checkins
           mycheckins.push formatTfvcCommit(checkin)
 
-        msg.reply mycheckins.join "\n"
+        reply msg, mycheckins.join "\n"
 
   formatGitCommit = (checkin, repo) ->
     if checkin.comment.length > MAX_COMMENT_SIZE
@@ -697,7 +737,7 @@ client_id=#{appId}\
       dateToSearchFrom = getStartDate(sinceDays)
 
       if repositories.length == 0
-        msg.reply "No Git repositories found."
+        reply msg, "No Git repositories found."
       else
         # use forEach to have a closure for repo
         repositories.forEach (repo) ->
@@ -727,14 +767,14 @@ client_id=#{appId}\
       client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
 
         return handleVsoError msg, err if err
-        return msg.reply "Couldn't find work item " + id if items.length == 0
+        return reply msg, "Couldn't find work item #{id}" if items.length == 0
 
         workItem = items[0]
 
         currentAssignedTo = getField workItem, "System.AssignedTo"
 
         if currentAssignedTo and currentAssignedTo.toUpperCase() == assignTo.toUpperCase()
-          msg.reply "Work item ##{id} is already assigned to #{currentAssignedTo}"
+          reply msg, "Work item ##{id} is already assigned to #{escapeIfNecessary currentAssignedTo}"
         else
           operations = []
 
@@ -745,9 +785,9 @@ client_id=#{appId}\
               return handleVsoError msg, err if err
 
               if result.message
-                msg.reply "Failed to assign ##{id} to #{assignTo}. Check if the user exists.\nError: #{result.message}"
+                reply msg, "Failed to assign ##{id} to #{escapeIfNecessary assignTo}. Check if the user exists.\nError: #{escapeIfNecessary result.message}"
               else
-                msg.reply "Work item ##{id} assigned to #{assignTo} #{result._links.html.href}"
+                reply msg, "Assigned to #{escapeIfNecessary assignTo} work item #{formatReplyUrl result._links.html.href, '#' + id}"
 
 
   #########################################
@@ -757,17 +797,17 @@ client_id=#{appId}\
     request "https://www.windowsazurestatus.com/odata/ServiceCurrentIncidents?api-version=1.0&$filter=startswith(Name,'#{escape("Visual Studio")}')" , (err, response, body) ->
       if(err)
         robot.logger.error "Error getting status: #{util.inspect(err)}"
-        msg.reply "Unable to get the current status of Visual Studio Online. Visit #{VSO_STATUS_URL}"
+        reply msg, "Unable to get the current status of Visual Studio Online. " + formatReplyUrl VSO_STATUS_URL,"Visit", {prependText : true}
       else
         if response.statusCode == 200
           status = JSON.parse body
           serviceStatusResponse = "Here is the current status of Visual Studio Online:\n"
           for vsoService in status.value
            serviceStatusResponse += vsoService.Name + " (" + vsoService.Status + ")\n"
-          serviceStatusResponse += "Full details: #{VSO_STATUS_URL}"
-          msg.reply serviceStatusResponse
+          serviceStatusResponse += formatReplyUrl VSO_STATUS_URL, "Full details", {prependText : true}
+          reply msg, serviceStatusResponse
         else
-          msg.reply "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
+          reply msg, "Failed to get Visual Studio Online status. HTTP error code was " + response.statusCode
 
 
 
@@ -779,24 +819,22 @@ client_id=#{appId}\
 
     url = getRSSSearchUrl searchText
 
-    robot.logger.debug "searching " + url
-
     rssParser url, (err,rss) ->
       if(err)
         robot.logger.error "error searching MSDN " + err
-        msg.reply "Failed to get Visual Studio Online help. Error: " + err
+        reply msg, "Failed to get Visual Studio Online help. Error: " + err
       else if rss.length == 0
-        msg.reply "No results were found."
+        reply msg, "No results were found."
       else
         if rss.length > 5 then rss = rss[0...5]
-        searchResults = "Here are the top search results for '" + msg.match[1] + "':\n\n"
+        searchResults = "Here are the top search results for '#{escapeIfNecessary msg.match[1]}':\n\n"
         index = 1
         for item in rss
-          searchResults += "#{index}. #{item.title} [#{item.link}]\n"
+          searchResults += "#{index}. #{formatReplyUrl item.link, item.title, { prependText : true}}\n"
           index++
-        searchResults += "\nFor the full results: " + getSearchUrl searchText
+        searchResults += "\n" + formatReplyUrl (getSearchUrl searchText), "Full results",{ prependText : true}
 
-        msg.reply searchResults
+        reply msg, searchResults
 
   getRSSSearchUrl = (searchString) ->
     return "http://social.msdn.microsoft.com/search/en-US/feed?format=RSS&theme=vscom&refinement=198%2c234&query=#{escape(searchString)}"
