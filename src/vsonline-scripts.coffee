@@ -11,7 +11,7 @@
 #   HUBOT_VSONLINE_ACCOUNT - The Visual Studio Online account name (Required)
 #   HUBOT_VSONLINE_USERNAME - Alternate credential username (Required in trust mode)
 #   HUBOT_VSONLINE_PASSWORD - Alternate credential password (Required in trust mode)
-#   HUBOT_VSONLINE_APP_ID - Visual Studion Online application ID (Required in impersonate mode)
+#   HUBOT_VSONLINE_APP_ID - Visual Studio Online application ID (Required in impersonate mode)
 #   HUBOT_VSONLINE_APP_SECRET - Visual Studio Online application secret (Required in impersonate mode)
 #   HUBOT_VSONLINE_AUTHORIZATION_CALLBACK_URL - Visual Studio Online application oauth callback (Required in impersonate mode)
 #
@@ -233,7 +233,9 @@ module.exports = (robot) ->
     return false unless impersonate
 
     userToken = vsoData.getOAuthTokenForUser(msg.envelope.user.id)
-    return not userToken or (sortScope(userToken.scope)) != (sortScope(authorizedScopes))
+    console.log JSON.stringify userToken
+
+    return not userToken or (sortScope(userToken.scope)) != (sortScope(authorizedScopes)) or appId != userToken.appId
 
   buildVsoAuthorizationUrl = (state)->
     "#{authorizeUrl}?\
@@ -261,6 +263,7 @@ client_id=#{appId}\
           expires_at.getTime() + parseInt(token.expires_in, 10)*1000)
 
         token.expires_at = expires_at
+        token.appId = appId
         vsoData.addOAuthTokenForUser(user.id, token)
         success(err, res) if typeof success is "function"
       else
