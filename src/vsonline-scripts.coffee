@@ -4,7 +4,7 @@
 # Dependencies:
 #    "node-uuid": "~1.4.1"
 #    "hubot": "~2.7.5"
-#    "vso-client": "~0.1.7"
+#    "vso-client": "~0.2.0"
 #    "parse-rss":  "~0.1.1"
 #
 # Configuration:
@@ -56,9 +56,7 @@ PROJECTCAPABILITIESKEY = "Capabilities"
 
 MAX_COMMENT_SIZE = 77
 
-DEFAULT_API_VERSION = "1.0-preview.1"
-WORKITEM_API_VERSION = "1.0-preview.2"
-PROFILE_API_VERSION= "1.0-preview"
+DEFAULT_API_VERSION = "1.0"
 
 #########################################
 # Helper class to manage VSOnline brain
@@ -191,7 +189,7 @@ module.exports = (robot) ->
 
   # OAuth optional env variables
   spsBaseUrl = process.env.HUBOT_VSONLINE_BASE_VSSPS_URL or "https://app.vssps.visualstudio.com"
-  authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "preview_api_all preview_msdn_licensing"
+  authorizedScopes = process.env.HUBOT_VSONLINE_AUTHORIZED_SCOPES or "vso.build_execute vso.work_write vso.code"
 
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
@@ -212,11 +210,15 @@ module.exports = (robot) ->
   #########################################
   # OAuth helper functions
   #########################################
+  sortScope = (scopes) ->
+    return "" if not scopes
+    return (scopes.split " ").sort().join " "
+
   needsVsoAuthorization = (msg) ->
     return false unless impersonate
 
     userToken = vsoData.getOAuthTokenForUser(msg.envelope.user.id)
-    return not userToken
+    return not userToken or (sortScope(userToken.scope)) != (sortScope(authorizedScopes))
 
   buildVsoAuthorizationUrl = (state)->
     "#{authorizeUrl}?\
@@ -427,7 +429,7 @@ client_id=#{appId}\
     unless impersonate
       return msg.reply "Hubot is not running in impersonation mode."
 
-    runVsoCmd msg, apiVersion: PROFILE_API_VERSION, cmd: (client) ->
+    runVsoCmd msg, cmd: (client) ->
       client.getCurrentProfile (err, res) ->
         return handleVsoError msg, err if err
         msg.reply "Your name is #{res.displayName} \
@@ -474,6 +476,7 @@ client_id=#{appId}\
   robot.respond /vso builds/i, (msg) ->
     runVsoCmd msg, cmd: (client) ->
       definitions=[]
+
       client.getBuildDefinitions (err, buildDefinitions) ->
         return handleVsoError msg, err if err
 
@@ -519,7 +522,7 @@ client_id=#{appId}\
 
     addFieldChange operations, "Microsoft.VSTS.Scheduling.RemainingWork", workRemaining
 
-    runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+    runVsoCmd msg, cmd: (client) ->
       client.updateWorkItem id, operations, (err, result) ->
         return handleVsoError msg, err if err
         if result.message
@@ -561,7 +564,7 @@ client_id=#{appId}\
         workItemType =  "Bug"
         addFieldChange operations, "Microsoft.VSTS.TCM.ReproSteps", description
 
-    runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+    runVsoCmd msg, cmd: (client) ->
       client.createWorkItem  operations, project, workItemType, (err, createdWorkItem) ->
         return handleVsoError msg, err if err
         msg.reply "Work item #" + createdWorkItem.id + " created on project #{project}: " + createdWorkItem._links.html.href
@@ -623,12 +626,8 @@ client_id=#{appId}\
               workItems.push "Here are the work items you have touched today on project " + project + ":"
 
               for workItem in items
-                for item in workItem.fields
-                  if item.field.refName == "System.Title"
-                    title = item.value
-
-                  if item.field.refName == "System.WorkItemType"
-                    witType = item.value
+                title = getField workItem, "System.Title"
+                witType = getField workItem, "System.WorkItemType"
 
                 workItems.push witType + " #" + workItem.id + ": " + title if title? and witType?
 
@@ -724,7 +723,7 @@ client_id=#{appId}\
       return "'" + msg.envelope.user.displayName.replace("'","''") + "'"
 
   assignWorkItemToUser = (msg, id, assignTo) ->
-    runVsoCmd msg, apiVersion : WORKITEM_API_VERSION, cmd: (client) ->
+    runVsoCmd msg, cmd: (client) ->
       client.getWorkItemsById id, ["System.Rev", "System.AssignedTo"], (err, items) ->
 
         return handleVsoError msg, err if err
@@ -741,7 +740,7 @@ client_id=#{appId}\
 
           addFieldChange operations, "System.AssignedTo", assignTo
 
-          runVsoCmd msg, apiVersion: WORKITEM_API_VERSION, cmd: (client) ->
+          runVsoCmd msg, cmd: (client) ->
             client.updateWorkItem id, operations, (err, result) ->
               return handleVsoError msg, err if err
 
