@@ -526,7 +526,7 @@ client_id=#{appId}\
         else
           definitions.push "Build definitions in account #{account}:"
           for build in buildDefinitions
-            definitions.push "{escapeIfNecessary build.name} (#{build.id})"
+            definitions.push "#{escapeIfNecessary build.name} (#{build.id})"
           reply msg, definitions.join "\n"
 
   robot.respond /vso build (.*)/i, (msg) ->
