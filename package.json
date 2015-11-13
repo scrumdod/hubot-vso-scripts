@@ -24,7 +24,7 @@
   "homepage": "https://github.com/scrumdod/vso-hubotscripts",
   "dependencies": {
     "node-uuid": "~1.4.1",
-    "vso-client": "~0.2.1",
+    "vso-client": "~0.2.4",
     "request": "~2.36.0",
     "parse-rss":  "~0.1.1"
   }

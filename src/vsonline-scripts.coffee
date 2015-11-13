@@ -4,7 +4,7 @@
 # Dependencies:
 #    "node-uuid": "~1.4.1"
 #    "hubot": "~2.7.5"
-#    "vso-client": "~0.2.0"
+#    "vso-client": "~0.2.4"
 #    "parse-rss":  "~0.1.1"
 #
 # Configuration:
@@ -34,6 +34,7 @@
 #
 # Notes:
 
+packageJson = require '../package.json'
 Client = require 'vso-client'
 util = require 'util'
 uuid = require 'node-uuid'
@@ -206,6 +207,9 @@ module.exports = (robot) ->
   # replies formatting
   replyFormat = (validateParameterValue process.env.HUBOT_VSONLINE_REPLY_FORMAT, ["plaintext", "html","markdown"], "HUBOT_VSONLINE_REPLY_FORMAT") or "plaintext"
 
+  # userAgent
+  userAgent = "vsonlineHubotScripts/#{packageJson.version}"
+
   accountBaseUrl = "https://#{account}.#{environmentDomain}"
   impersonate = if appId then true else false
 
@@ -303,9 +307,9 @@ client_id=#{appId}\
 
     if impersonate
       token = vsoData.getOAuthTokenForUser user.id
-      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl , apiVersion : apiVersion }
+      Client.createOAuthClient url, collection, token.access_token, { spsUri: spsBaseUrl , apiVersion : apiVersion, userAgent: userAgent }
     else
-      Client.createClient url, collection, username, password, {apiVersion : apiVersion}
+      Client.createClient url, collection, username, password, {apiVersion : apiVersion, userAgent: userAgent}
 
   runVsoCmd = (msg, {url, collection, cmd, apiVersion}) ->
     return askForVsoAuthorization(msg) if needsVsoAuthorization(msg)
